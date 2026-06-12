@@ -5,41 +5,50 @@ app.use(express.json());
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const SITE_URL = 'https://gotaskflow.ru';
 
+// Цены на услуги в токенах
+const PRICES = {
+    task_creation: 'от 10 токенов',
+    ai_post: '5 токенов',
+    ai_script: '10 токенов',
+    ai_seo: '3 токена',
+    freelance_order: 'от 20 токенов'
+};
+
 app.get('/', (req, res) => {
     res.send('🤖 Бот TaskFlow работает!');
 });
 
-// Главное меню с категориями
+// Главное меню
 const mainMenu = {
     inline_keyboard: [
+        [
+            { text: '💎 Купить токены', callback_data: 'buy_tokens' },
+            { text: '💰 Мой баланс', callback_data: 'balance' }
+        ],
         [
             { text: '📋 Биржа заданий', callback_data: 'tasks' },
             { text: '🤖 AI инструменты', callback_data: 'ai' }
         ],
         [
             { text: '💼 Фриланс', callback_data: 'freelance' },
-            { text: '📊 Аналитика', callback_data: 'analytics' }
+            { text: '👥 Рефералы', callback_data: 'referrals' }
         ],
         [
-            { text: '👤 Профиль', callback_data: 'profile' },
-            { text: '💰 Баланс', callback_data: 'balance' }
-        ],
-        [
-            { text: '❓ Помощь', callback_data: 'help' }
+            { text: '❓ Как заработать?', callback_data: 'how_to_earn' }
         ]
     ]
 };
 
-// Меню AI инструментов
-const aiMenu = {
+// Меню покупки токенов
+const buyTokensMenu = {
     inline_keyboard: [
         [
-            { text: '📝 Генератор постов', callback_data: 'ai_post' },
-            { text: '🎨 Генератор идей', callback_data: 'ai_ideas' }
+            { text: '💰 100 токенов — 49₽', callback_data: 'buy_100' },
+            { text: '💰 500 токенов — 199₽', callback_data: 'buy_500' }
         ],
         [
-            { text: '📹 Сценарии для видео', callback_data: 'ai_script' },
-            { text: '🔍 SEO анализ', callback_data: 'ai_seo' }
+            { text: '💰 1000 токенов — 349₽', callback_data: 'buy_1000' },
+            { text: '💰 5000 токенов — 1499₽', callback_data: 'buy_5000' }
         ],
         [
             { text: '⬅️ Назад', callback_data: 'back_main' }
@@ -47,24 +56,6 @@ const aiMenu = {
     ]
 };
 
-// Меню фриланса
-const freelanceMenu = {
-    inline_keyboard: [
-        [
-            { text: '✏️ Дизайн', callback_data: 'freelance_design' },
-            { text: '🎬 Монтаж', callback_data: 'freelance_video' }
-        ],
-        [
-            { text: '📝 Копирайтинг', callback_data: 'freelance_copy' },
-            { text: '💻 Разработка', callback_data: 'freelance_dev' }
-        ],
-        [
-            { text: '⬅️ Назад', callback_data: 'back_main' }
-        ]
-    ]
-};
-
-// Обработка вебхука
 app.post('/webhook', async (req, res) => {
     const message = req.body.message;
     if (!message) {
@@ -76,21 +67,24 @@ app.post('/webhook', async (req, res) => {
     const text = message.text || '';
     const username = message.from?.first_name || 'друг';
 
-    // Обработка команд
     if (text === '/start') {
         const welcomeText = 
 `✨ *Добро пожаловать в TaskFlow, ${username}!* ✨
 
-Многофункциональная платформа для продвижения и заработка.
+💎 *Что такое TaskFlow?*
 
-🚀 *Что тебя ждёт:*
+Платформа, где ты можешь:
+• 💰 *Зарабатывать токены* — выполняя задания или продавая услуги
+• 🚀 *Продвигать свои проекты* — создавая задания для других
+• 🤖 *Использовать AI* — генерация контента за токены
 
-📋 *Биржа заданий* — зарабатывай токены на простых действиях
-🤖 *AI инструменты* — генерация постов, идей, сценариев
-💼 *Фриланс* — заказы на дизайн, монтаж, разработку
-📊 *Аналитика* — статистика каналов и аудитории
+🎯 *Как начать?*
 
-🎯 *Выбери раздел в меню ниже!*`;
+1️⃣ Купи токены или заработай их
+2️⃣ Создай задание или выполни чужое
+3️⃣ Получай результат и новые токены!
+
+👇 *Выбери действие в меню*`;
 
         await sendMessage(chatId, welcomeText, mainMenu);
         res.sendStatus(200);
@@ -100,7 +94,6 @@ app.post('/webhook', async (req, res) => {
     res.sendStatus(200);
 });
 
-// Обработка нажатий на кнопки
 app.post('/webhook/callback', async (req, res) => {
     const callback = req.body.callback_query;
     if (!callback) {
@@ -110,231 +103,177 @@ app.post('/webhook/callback', async (req, res) => {
 
     const chatId = callback.message.chat.id;
     const data = callback.data;
+    const username = callback.from?.first_name || 'пользователь';
 
     switch(data) {
-        // Главные разделы
-        case 'tasks':
+        case 'buy_tokens':
             await sendMessage(chatId,
-`📋 *Биржа заданий*
+`💎 *Купить токены*
 
-💡 *Что это:* Выполняй простые задания (подписки, лайки, репосты) и получай токены.
+Выбери пакет токенов:
 
-✅ *Как работает:*
-1. Выбери задание на сайте
-2. Выполни действие
-3. Получи токены на баланс
+| Токены | Цена |
+|--------|------|
+| 100 | 49 ₽ |
+| 500 | 199 ₽ |
+| 1000 | 349 ₽ |
+| 5000 | 1499 ₽ |
 
-🚀 *Перейти к заданиям:* ${SITE_URL}/tasks`);
-            break;
+💳 *Способы оплаты:* карты РФ, СБП, ЮMoney
 
-        case 'ai':
-            await sendMessage(chatId,
-`🤖 *AI инструменты*
-
-Доступные инструменты:
-
-📝 *Генератор постов* — тексты для соцсетей
-🎨 *Генератор идей* — темы для контента
-📹 *Сценарии для видео* — готовые планы
-🔍 *SEO анализ* — оптимизация контента
-
-🔮 *Выбери инструмент в меню ниже*`, aiMenu);
-            break;
-
-        case 'freelance':
-            await sendMessage(chatId,
-`💼 *Фриланс-биржа*
-
-Категории заказов:
-
-✏️ *Дизайн* — логотипы, баннеры, презентации
-🎬 *Монтаж* — видео, рилсы, клипы
-📝 *Копирайтинг* — тексты, статьи, описания
-💻 *Разработка* — сайты, боты, скрипты
-
-🔧 *Выбери категорию*`, freelanceMenu);
-            break;
-
-        case 'analytics':
-            await sendMessage(chatId,
-`📊 *Аналитика*
-
-⚡ *Скоро будет доступно:*
-
-• 📈 Статистика просмотров канала
-• 👥 Анализ аудитории
-• 🔥 Тренды и рекомендации
-• 📊 Конкурентный анализ
-
-*Токенами!* Следите за обновлениями.`);
-            break;
-
-        case 'profile':
-            await sendMessage(chatId,
-`👤 *Мой профиль*
-
-🔗 *Привяжи аккаунт на сайте:* ${SITE_URL}/profile
-
-После привязки ты сможешь:
-• 💰 Следить за балансом
-• 📊 Видеть статистику
-• 🎁 Получать бонусы
-• 🏆 Отслеживать достижения`);
+👇 *Нажми на пакет ниже*`, buyTokensMenu);
             break;
 
         case 'balance':
             await sendMessage(chatId,
 `💰 *Твой баланс*
 
-👤 У тебя пока нет привязанного аккаунта.
+👤 ${username}, у тебя пока 0 токенов.
 
-🔗 *Привяжи аккаунт:* ${SITE_URL}/profile
+💎 *Пополни баланс:* Купи токены за рубли
+📋 *Или заработай:* Выполняй задания в бирже
 
-⚡ *Как заработать токены:*
-• Выполняй задания в бирже
-• Создавай свои задания
-• Приглашай друзей
-• Участвуй в конкурсах`);
+🎁 *Бонус:* Приведи друга → +50 токенов`);
             break;
 
-        case 'help':
+        case 'how_to_earn':
             await sendMessage(chatId,
-`🆘 *Помощь*
+`💡 *Как заработать токены?*
 
-📌 *Основные команды:*
-/start — Главное меню
-/balance — Мой баланс
-/tasks — Биржа заданий
-/ai — AI инструменты
-/freelance — Фриланс
-/profile — Профиль
+1️⃣ *Выполняй задания*
+→ Подпишись, поставь лайк, напиши комментарий
+→ Получи от 1 до 100 токенов за действие
 
-🔗 *Сайт:* ${SITE_URL}
-📧 *Поддержка:* @aquozales
+2️⃣ *Создавай задания*
+→ Другие выполняют твои задания
+→ Ты получаешь продвижение, они — токены
 
-❓ *FAQ:*
-• Как заработать токены? → Задания в бирже
-• Где потратить токены? → Создание заданий, AI инструменты
-• Как вывести? → Скоро появится`);
+3️⃣ *Приглашай друзей*
+→ За каждого друга +50 токенов
+→ Ссылка: ${SITE_URL}/ref/твой_id
+
+4️⃣ *Продавай услуги*
+→ Дизайн, монтаж, разработка
+→ Зарабатывай на фриланс-бирже
+
+5️⃣ *Используй AI инструменты*
+→ Создавай качественный контент
+→ Привлекай больше клиентов`);
             break;
 
-        // AI подменю
-        case 'ai_post':
+        case 'tasks':
             await sendMessage(chatId,
-`📝 *Генератор постов*
+`📋 *Биржа заданий*
 
-🎯 *Выбери тему поста:*
+💰 *Как заработать:*
+• Выполняй задания → получай токены
+• Создавай задания → продвигай свои проекты
 
-• Продукт/услуга
-• Личный бренд
-• Развлекательный
-• Обучающий
+⚡ *Стоимость создания задания:* ${PRICES.task_creation}
 
-👉 *Перейди на сайт:* ${SITE_URL}/ai/post`);
+🚀 *Перейти на сайт:* ${SITE_URL}/tasks`);
             break;
 
-        case 'ai_ideas':
+        case 'ai':
             await sendMessage(chatId,
-`🎨 *Генератор идей*
+`🤖 *AI инструменты*
 
-💡 *Идеи для контента:*
+💎 *Цены в токенах:*
 
-• 10 идей для TikTok за 5 минут
-• Тренды этой недели
-• Как залететь в рекомендации
+📝 Генератор постов — ${PRICES.ai_post}
+📹 Сценарии для видео — ${PRICES.ai_script}
+🔍 SEO анализ текста — ${PRICES.ai_seo}
+🎨 Генератор идей — 5 токенов
 
-👉 *Попробовать:* ${SITE_URL}/ai/ideas`);
+👉 *Попробовать:* ${SITE_URL}/ai`);
             break;
 
-        case 'ai_script':
+        case 'freelance':
             await sendMessage(chatId,
-`📹 *Сценарии для видео*
+`💼 *Фриланс-биржа*
 
-🎬 *Готовые шаблоны:*
+💎 *Как заработать:*
+• Бери заказы → получай токены
+• Выполняй качественно → высокий рейтинг
 
-• Распаковка продукта (60 сек)
-• Обзор услуги (30 сек)
-• Обучение (90 сек)
+📝 *Разместить заказ:* ${PRICES.freelance_order}
 
-👉 *Создать сценарий:* ${SITE_URL}/ai/script`);
+🚀 *Перейти:* ${SITE_URL}/freelance`);
             break;
 
-        case 'ai_seo':
+        case 'referrals':
             await sendMessage(chatId,
-`🔍 *SEO анализ*
+`👥 *Реферальная программа*
 
-📊 *Анализируй свои посты:*
+🎁 *Как получить бонус:*
 
-• Оптимизация заголовков
-• Ключевые слова
-• Вовлеченность
+1. Пригласи друга по ссылке:
+\`${SITE_URL}/ref/ваш_id\`
 
-👉 *Проверить пост:* ${SITE_URL}/ai/seo`);
+2. Друг регистрируется
+3. Вы получаете +50 токенов
+
+✨ *Друг тоже получит 50 токенов за первую покупку!*
+
+📊 *Твои приглашённые:* 0
+💰 *Заработано:* 0 токенов`);
             break;
 
-        // Фриланс подменю
-        case 'freelance_design':
+        // Покупка токенов
+        case 'buy_100':
             await sendMessage(chatId,
-`✏️ *Заказы на дизайн*
+`💎 *Покупка 100 токенов*
 
-💎 *Популярные услуги:*
+💰 Сумма: 49 ₽
+🔹 Токенов: 100
 
-• Логотип — от 100 токенов
-• Баннер — от 50 токенов
-• Презентация — от 200 токенов
+👇 *Для оплаты перейди на сайт:*
+${SITE_URL}/buy?package=100
 
-👉 *Создать заказ:* ${SITE_URL}/freelance/design`);
+💳 После оплаты токены поступят на баланс автоматически.`);
             break;
 
-        case 'freelance_video':
+        case 'buy_500':
             await sendMessage(chatId,
-`🎬 *Заказы на монтаж*
+`💎 *Покупка 500 токенов*
 
-✨ *Примеры цен:*
+💰 Сумма: 199 ₽
+🔹 Токенов: 500 (+20 бонусных!)
 
-• Риелс (до 60 сек) — от 150 токенов
-• Клип (3 мин) — от 300 токенов
-• Обработка видео — от 50 токенов
-
-👉 *Разместить заказ:* ${SITE_URL}/freelance/video`);
+👇 *Оплатить:* ${SITE_URL}/buy?package=500`);
             break;
 
-        case 'freelance_copy':
+        case 'buy_1000':
             await sendMessage(chatId,
-`📝 *Копирайтинг*
+`💎 *Покупка 1000 токенов*
 
-✍️ *Цены:*
+💰 Сумма: 349 ₽
+🔹 Токенов: 1000 (+50 бонусных!)
 
-• Пост для соцсетей — от 30 токенов
-• Статья (1000 знаков) — от 50 токенов
-• Слоган — от 20 токенов
-
-👉 *Создать заказ:* ${SITE_URL}/freelance/copy`);
+👇 *Оплатить:* ${SITE_URL}/buy?package=1000`);
             break;
 
-        case 'freelance_dev':
+        case 'buy_5000':
             await sendMessage(chatId,
-`💻 *Разработка*
+`💎 *Покупка 5000 токенов*
 
-⚙️ *Услуги:*
+💰 Сумма: 1499 ₽
+🔹 Токенов: 5000 (+500 бонусных!)
 
-• Telegram бот — от 500 токенов
-• Сайт-визитка — от 1000 токенов
-• Скрипты — от 200 токенов
-
-👉 *Заказать разработку:* ${SITE_URL}/freelance/dev`);
+👇 *Оплатить:* ${SITE_URL}/buy?package=5000`);
             break;
 
-        // Навигация
         case 'back_main':
-            await sendMessage(chatId, `✨ *Главное меню TaskFlow* ✨\n\nВыбери раздел:`, mainMenu);
+            await sendMessage(chatId,
+`✨ *Главное меню TaskFlow* ✨\n\n💎 Токены — главная валюта проекта.\n\n🔹 Купить → потратить на услуги\n🔹 Заработать → выполняя задания\n🔹 Пригласить друзей → +50 токенов
+
+👇 *Выбери действие:*`, mainMenu);
             break;
 
         default:
             await sendMessage(chatId, '⚠️ Неизвестная команда. Используй /start', mainMenu);
     }
 
-    // Отвечаем на callback
     await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -344,7 +283,6 @@ app.post('/webhook/callback', async (req, res) => {
     res.sendStatus(200);
 });
 
-// Функция отправки сообщения
 async function sendMessage(chatId, text, replyMarkup = null) {
     const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
     const body = {
