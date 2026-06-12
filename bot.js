@@ -4,10 +4,12 @@ app.use(express.json());
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 
-app.get('/', (req, res) => {
-    res.send('Бот TaskFlow работает на Render!');
+// Простой ответ на GET (чтобы браузер не ругался)
+app.get('/webhook', (req, res) => {
+    res.status(200).send('Webhook is ready. Use POST method.');
 });
 
+// ОСНОВНОЙ обработчик для Telegram (POST)
 app.post('/webhook', async (req, res) => {
     try {
         const message = req.body.message;
@@ -30,8 +32,13 @@ app.post('/webhook', async (req, res) => {
     }
 });
 
+// Корневой маршрут для проверки
+app.get('/', (req, res) => {
+    res.send('Бот TaskFlow работает на Render!');
+});
+
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
     console.log(`✅ Бот запущен на порту ${port}`);
-    console.log(`📡 Вебхук: https://taskflow-telegram-bot.onrender.com/webhook`);
+    console.log(`📡 Вебхук доступен: https://taskflow-telegram-bot.onrender.com/webhook`);
 });
