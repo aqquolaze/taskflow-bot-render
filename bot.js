@@ -20,6 +20,7 @@ const mainMenu = {
             { text: '🎁 Конкурсы', callback_data: 'contests' }
         ],
         [
+            { text: '📋 О проекте', callback_data: 'about' },
             { text: '❓ Помощь', callback_data: 'help' }
         ]
     ]
@@ -46,7 +47,7 @@ const gamesMenu = {
     ]
 };
 
-// Состояния игр (для хранения загаданных чисел)
+// Состояния игр
 const gameStates = new Map();
 
 app.get('/', (req, res) => {
@@ -64,7 +65,7 @@ app.post('/webhook', async (req, res) => {
     const text = message.text || '';
     const username = message.from?.first_name || 'друг';
 
-    // Обработка обычных сообщений (для игры "Угадай число")
+    // Обработка игры "Угадай число"
     if (gameStates.has(chatId) && !text.startsWith('/')) {
         const game = gameStates.get(chatId);
         if (game.type === 'number') {
@@ -77,7 +78,7 @@ app.post('/webhook', async (req, res) => {
             
             if (guess === game.number) {
                 gameStates.delete(chatId);
-                await sendMessage(chatId, `🎉 *Поздравляю!* Ты угадал число ${game.number}! 🎉\n\nПопробуй другие игры: /start`, gamesMenu);
+                await sendMessage(chatId, `🎉 *Поздравляю!* Ты угадал число ${game.number}! 🎉\n\nПопробуй другие игры в меню!`, gamesMenu);
             } else if (guess < game.number) {
                 await sendMessage(chatId, `📈 Моё число *больше* чем ${guess}. Попробуй ещё!`);
             } else {
@@ -92,9 +93,35 @@ app.post('/webhook', async (req, res) => {
         const welcomeText = 
 `✨ *Добро пожаловать в TaskFlow, ${username}!* ✨
 
-💎 *Всё самое интересное на сайте:* ${SITE_URL}
+💎 *Что такое TaskFlow?*
 
-🎮 *А здесь ты можешь поиграть в мини-игры и выиграть бонусы!*
+TaskFlow — это платформа для продвижения проектов и использования AI инструментов за внутренние токены.
+
+🚀 *Что доступно на сайте:*
+
+📋 *Биржа заданий*
+→ Создавай задания: подписки, лайки, репосты
+→ Продвигай свои проекты легко и быстро
+
+🤖 *AI инструменты*
+→ Генератор постов для соцсетей
+→ Генератор идей для контента
+→ SEO анализ текстов
+→ И другие инструменты
+
+⚡ *Быстрые услуги*
+→ Лайки, подписки, комментарии
+→ Выполнение за 5-30 минут
+
+💎 *Токены*
+→ Внутренняя валюта платформы
+→ Получай за бонусы, конкурсы и приглашения
+→ Трать на все услуги
+
+🎁 *Бонусы и конкурсы*
+→ Ежедневный бонус на сайте
+→ Конкурс активности
+→ Розыгрыши призов
 
 👇 *Выбери действие в меню*`;
 
@@ -119,39 +146,68 @@ app.post('/webhook/callback', async (req, res) => {
 
     switch(data) {
         case 'back_main':
-            await sendMessage(chatId, '✨ *Главное меню TaskFlow* ✨', mainMenu);
+            await sendMessage(chatId, '✨ *Главное меню TaskFlow* ✨\n\nВыбери действие:', mainMenu);
+            break;
+
+        case 'about':
+            await sendMessage(chatId,
+`📋 *О проекте TaskFlow*
+
+💎 *Что это?*
+Платформа для продвижения проектов и использования AI инструментов.
+
+🚀 *Возможности сайта:*
+
+• *Биржа заданий* — создавай задания для продвижения
+• *AI инструменты* — генерация постов, идей, SEO
+• *Быстрые услуги* — лайки, подписки, комментарии
+• *Токены* — внутренняя валюта
+• *Конкурсы и бонусы* — получай бесплатные токены
+
+🎯 *Миссия:*
+Сделать продвижение простым и доступным, а использование AI — удобным.
+
+🔗 *Сайт:* ${SITE_URL}
+📧 *Поддержка:* @aquozales
+
+👇 *Используй меню для навигации*`);
             break;
 
         case 'profile':
             await sendMessage(chatId,
 `👤 *Профиль*
 
-🔗 *Привяжи аккаунт и управляй профилем на сайте:*
-
+🔗 *Привяжи аккаунт на сайте:*
 ${SITE_URL}/profile
 
 📊 *После привязки ты увидишь:*
 • Баланс токенов
 • Историю операций
-• Статистику`);
+• Статистику заданий
+• Личные данные
+
+🎁 *Бонус за регистрацию:* 100 токенов!`);
             break;
 
         case 'tokens':
             await sendMessage(chatId,
 `💰 *Токены*
 
-💎 *Внутренняя валюта платформы*
+💎 *Что это?*
+Внутренняя валюта платформы TaskFlow.
 
 🎁 *Как получить:*
-• Бонус за регистрацию
+• Бонус за регистрацию (100 токенов)
 • Конкурсы и розыгрыши
-• Приглашение друзей
-• Акции
+• Приглашение друзей (+50 токенов)
+• Ежедневный бонус на сайте
+• Акции и спецпредложения
 
 📋 *На что тратить:*
-• Создание заданий
-• AI инструменты
-• Быстрые услуги
+• Создание заданий в бирже
+• AI генераторы (посты, идеи)
+• SEO анализ текстов
+• Быстрые услуги (лайки, подписки)
 
 👉 *Управлять балансом:* ${SITE_URL}/tokens`);
             break;
@@ -160,15 +216,17 @@ ${SITE_URL}/profile
             await sendMessage(chatId,
 `🎁 *Конкурсы и розыгрыши*
 
-🔥 *Актуальные конкурсы:*
+🔥 *Актуальные бонусы:*
 
-• *Ежедневный бонус* — заходи на сайт и получай токены
-• *Конкурс активности* — топ-10 в конце месяца
-• *Розыгрыши* — следи за анонсами
+• *Ежедневный бонус* — заходи на сайт каждый день и получай токены
+• *Бонус за регистрацию* — 100 токенов новым пользователям
+• *Пригласи друга* — +50 токенов за каждого друга
+• *Конкурс активности* — топ-10 в конце месяца получают призы
+• *Розыгрыши* — следи за анонсами в нашем канале
 
 👉 *Участвовать:* ${SITE_URL}/contests
 
-🎯 *А пока можешь поиграть в мини-игры!*`);
+🎮 *А пока можешь поиграть в мини-игры в меню!*`);
             break;
 
         case 'help':
@@ -177,12 +235,21 @@ ${SITE_URL}/profile
 
 📌 *О боте:*
 
-🌐 *Сайт:* ${SITE_URL}
-🎮 *Игры:* Кости, дартс, футбол, баскетбол, угадай число, камень-ножницы
+Это официальный Telegram-бот платформы TaskFlow.
+
+🌐 *На сайте ты можешь:*
+• Создавать задания для продвижения
+• Использовать AI инструменты
+• Заказывать быстрые услуги
+• Управлять балансом токенов
+
+🎮 *В боте доступны мини-игры:*
+• Кости, дартс, футбол, баскетбол
+• Угадай число
+• Камень-ножницы-бумага
 
 📧 *Поддержка:* @aquozales
-
-🎁 *Бонусы и конкурсы:* Следи за анонсами в канале!
+🔗 *Сайт:* ${SITE_URL}
 
 👇 *Используй меню для навигации*`);
             break;
@@ -200,19 +267,19 @@ ${SITE_URL}/profile
 
         case 'game_darts':
             const dartsValue = Math.floor(Math.random() * 7) + 1;
-            const dartsMessages = ['Мимо!', '1 очко', '2 очка', '3 очка', '4 очка', '5 очков', '🎯 ЯБЛОЧКО! 6 очков!'];
+            const dartsMessages = ['Мимо! 0 очков', '1 очко', '2 очка', '3 очка', '4 очка', '5 очков', '🎯 ЯБЛОЧКО! 6 очков!'];
             await sendMessage(chatId, `🎯 *Дартс*\n\n${dartsMessages[dartsValue]}`);
             break;
 
         case 'game_football':
             const footballResult = Math.floor(Math.random() * 4);
-            const footballMessages = ['🥅 ГОЛ! Ты забил!', '🧤 Вратарь поймал мяч', '📐 Удар в штангу', '🌪️ Удар мимо ворот'];
+            const footballMessages = ['🥅 ГОЛ! Ты забил! 🎉', '🧤 Вратарь поймал мяч', '📐 Удар в штангу', '🌪️ Удар мимо ворот'];
             await sendMessage(chatId, `⚽ *Футбол*\n\n${footballMessages[footballResult]}`);
             break;
 
         case 'game_basketball':
             const basketballResult = Math.floor(Math.random() * 4);
-            const basketballMessages = ['🏀 Трёхочковый! Свиш!', '🧱 Удар в кольцо — мимо', '📐 Бросок со штрафной — точно!', '💥 Блок-шот! Не залетело'];
+            const basketballMessages = ['🏀 Трёхочковый! Свиш! 🎉', '🧱 Удар в кольцо — мимо', '📐 Бросок со штрафной — точно!', '💥 Блок-шот! Не залетело'];
             await sendMessage(chatId, `🏀 *Баскетбол*\n\n${basketballMessages[basketballResult]}`);
             break;
 
@@ -227,9 +294,6 @@ ${SITE_URL}/profile
             break;
 
         case 'game_rps':
-            const choices = ['✊ Камень', '✋ Бумага', '✌️ Ножницы'];
-            const botChoice = Math.floor(Math.random() * 3);
-            
             const rpsMenu = {
                 inline_keyboard: [
                     [
@@ -242,29 +306,26 @@ ${SITE_URL}/profile
                     ]
                 ]
             };
-            
-            await sendMessage(chatId, `✂️ *Камень-ножницы-бумага*
-
-Выбери свой вариант:`, rpsMenu);
+            await sendMessage(chatId, `✂️ *Камень-ножницы-бумага*\n\nВыбери свой вариант:`, rpsMenu);
             break;
 
         // === ЛОГИКА КАМЕНЬ-НОЖНИЦЫ ===
         case 'rps_rock':
             const botRock = Math.floor(Math.random() * 3);
             const resultRock = getRPSResult(0, botRock);
-            await sendMessage(chatId, `${resultRock}`);
+            await sendMessage(chatId, resultRock);
             break;
 
         case 'rps_paper':
             const botPaper = Math.floor(Math.random() * 3);
             const resultPaper = getRPSResult(1, botPaper);
-            await sendMessage(chatId, `${resultPaper}`);
+            await sendMessage(chatId, resultPaper);
             break;
 
         case 'rps_scissors':
             const botScissors = Math.floor(Math.random() * 3);
             const resultScissors = getRPSResult(2, botScissors);
-            await sendMessage(chatId, `${resultScissors}`);
+            await sendMessage(chatId, resultScissors);
             break;
 
         default:
