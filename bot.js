@@ -9,16 +9,15 @@ const SITE_URL = 'https://gotaskflow.ru';
 const mainMenu = {
     inline_keyboard: [
         [
-            { text: '📋 Биржа заданий', callback_data: 'tasks' },
-            { text: '🤖 AI Инструменты', callback_data: 'ai_tools' }
-        ],
-        [
-            { text: '⚙️ Без ИИ', callback_data: 'no_ai_tools' },
-            { text: '🔥 Скоро', callback_data: 'coming_soon' }
+            { text: '🌐 Открыть сайт', url: SITE_URL }
         ],
         [
             { text: '👤 Профиль', callback_data: 'profile' },
-            { text: '💰 Токены', callback_data: 'tokens_info' }
+            { text: '💰 Токены', callback_data: 'tokens' }
+        ],
+        [
+            { text: '🎮 Мини-игры', callback_data: 'games' },
+            { text: '🎁 Конкурсы', callback_data: 'contests' }
         ],
         [
             { text: '❓ Помощь', callback_data: 'help' }
@@ -26,20 +25,20 @@ const mainMenu = {
     ]
 };
 
-// Меню AI инструментов
-const aiToolsMenu = {
+// Меню мини-игр
+const gamesMenu = {
     inline_keyboard: [
         [
-            { text: '📝 Генератор постов', callback_data: 'ai_post' },
-            { text: '🎨 Генератор идей', callback_data: 'ai_ideas' }
+            { text: '🎲 Кости', callback_data: 'game_dice' },
+            { text: '🎯 Дартс', callback_data: 'game_darts' }
         ],
         [
-            { text: '📹 AI-резюме видео', callback_data: 'coming_soon' },
-            { text: '🔍 SEO анализ', callback_data: 'coming_soon' }
+            { text: '⚽ Футбол', callback_data: 'game_football' },
+            { text: '🏀 Баскетбол', callback_data: 'game_basketball' }
         ],
         [
-            { text: '📚 AI-репетитор', callback_data: 'coming_soon' },
-            { text: '✍️ Анти-плагиат', callback_data: 'coming_soon' }
+            { text: '🎰 Угадай число', callback_data: 'game_number' },
+            { text: '✂️ Камень-ножницы', callback_data: 'game_rps' }
         ],
         [
             { text: '⬅️ Назад', callback_data: 'back_main' }
@@ -47,43 +46,8 @@ const aiToolsMenu = {
     ]
 };
 
-// Меню "Без ИИ"
-const noAiToolsMenu = {
-    inline_keyboard: [
-        [
-            { text: '⚡ Быстрые услуги', callback_data: 'fast_services' },
-            { text: '🏆 Рейтинг', callback_data: 'coming_soon' }
-        ],
-        [
-            { text: '🔄 Обменник', callback_data: 'coming_soon' },
-            { text: '🎁 Конкурсы', callback_data: 'contests' }
-        ],
-        [
-            { text: '📊 Статистика', callback_data: 'coming_soon' },
-            { text: '💼 Вакансии', callback_data: 'coming_soon' }
-        ],
-        [
-            { text: '⬅️ Назад', callback_data: 'back_main' }
-        ]
-    ]
-};
-
-// Меню "Скоро"
-const comingSoonMenu = {
-    inline_keyboard: [
-        [
-            { text: '📈 AI-аналитика', callback_data: 'coming_soon_detail' },
-            { text: '🎧 Голосовой AI', callback_data: 'coming_soon_detail' }
-        ],
-        [
-            { text: '🌍 P2P биржа', callback_data: 'coming_soon_detail' },
-            { text: '📱 Мобильное приложение', callback_data: 'coming_soon_detail' }
-        ],
-        [
-            { text: '⬅️ Назад', callback_data: 'back_main' }
-        ]
-    ]
-};
+// Состояния игр (для хранения загаданных чисел)
+const gameStates = new Map();
 
 app.get('/', (req, res) => {
     res.send('🤖 TaskFlow Bot');
@@ -100,27 +64,39 @@ app.post('/webhook', async (req, res) => {
     const text = message.text || '';
     const username = message.from?.first_name || 'друг';
 
+    // Обработка обычных сообщений (для игры "Угадай число")
+    if (gameStates.has(chatId) && !text.startsWith('/')) {
+        const game = gameStates.get(chatId);
+        if (game.type === 'number') {
+            const guess = parseInt(text);
+            if (isNaN(guess)) {
+                await sendMessage(chatId, '🔢 Введи число!');
+                res.sendStatus(200);
+                return;
+            }
+            
+            if (guess === game.number) {
+                gameStates.delete(chatId);
+                await sendMessage(chatId, `🎉 *Поздравляю!* Ты угадал число ${game.number}! 🎉\n\nПопробуй другие игры: /start`, gamesMenu);
+            } else if (guess < game.number) {
+                await sendMessage(chatId, `📈 Моё число *больше* чем ${guess}. Попробуй ещё!`);
+            } else {
+                await sendMessage(chatId, `📉 Моё число *меньше* чем ${guess}. Попробуй ещё!`);
+            }
+            res.sendStatus(200);
+            return;
+        }
+    }
+
     if (text === '/start') {
         const welcomeText = 
 `✨ *Добро пожаловать в TaskFlow, ${username}!* ✨
 
-💎 *Что такое TaskFlow?*
+💎 *Всё самое интересное на сайте:* ${SITE_URL}
 
-Платформа, где ты можешь:
+🎮 *А здесь ты можешь поиграть в мини-игры и выиграть бонусы!*
 
-🚀 *Продвигать свои проекты*
-→ Создавай задания: подписки, лайки, репосты
-
-🤖 *Пользоваться AI инструментами*
-→ Генерация постов и идей
-
-⚡ *Заказывать быстрые услуги*
-→ Лайки, подписки, комментарии
-
-🎁 *Бонусы, конкурсы и акции*
-→ Следи за обновлениями!
-
-👇 *Выбери раздел в меню*`;
+👇 *Выбери действие в меню*`;
 
         await sendMessage(chatId, welcomeText, mainMenu);
         res.sendStatus(200);
@@ -139,191 +115,156 @@ app.post('/webhook/callback', async (req, res) => {
 
     const chatId = callback.message.chat.id;
     const data = callback.data;
+    const username = callback.from?.first_name || 'пользователь';
 
     switch(data) {
-        // === НАВИГАЦИЯ ===
         case 'back_main':
-            await sendMessage(chatId, '✨ *Главное меню TaskFlow* ✨\n\nВыбери раздел:', mainMenu);
+            await sendMessage(chatId, '✨ *Главное меню TaskFlow* ✨', mainMenu);
             break;
 
-        // === РАЗДЕЛЫ ===
-        case 'tasks':
-            await sendMessage(chatId,
-`📋 *Биржа заданий*
-
-Создавай задания для продвижения своих проектов.
-
-🚀 *Перейти на сайт:* ${SITE_URL}/tasks`);
-            break;
-
-        case 'ai_tools':
-            await sendMessage(chatId,
-`🤖 *AI Инструменты*
-
-✨ *Доступно сейчас:*
-📝 Генератор постов
-🎨 Генератор идей
-
-🔮 *Скоро появится:*
-📹 AI-резюме видео
-🔍 SEO анализ
-📚 AI-репетитор
-✍️ Анти-плагиат
-
-👇 *Выбери инструмент*`, aiToolsMenu);
-            break;
-
-        case 'no_ai_tools':
-            await sendMessage(chatId,
-`⚙️ *Инструменты без ИИ*
-
-✨ *Доступно сейчас:*
-⚡ Быстрые услуги
-
-🔮 *Скоро появится:*
-🏆 Рейтинг пользователей
-🔄 Обменник токенов
-🎁 Конкурсы и розыгрыши
-📊 Личная статистика
-💼 Агрегатор вакансий
-
-👇 *Выбери раздел*`, noAiToolsMenu);
-            break;
-
-        case 'coming_soon':
-            await sendMessage(chatId,
-`🔥 *Скоро в TaskFlow*
-
-Новые функции в разработке:
-
-🤖 *AI инструменты:*
-• AI-резюме для видео
-• Голосовой ассистент
-• AI-аналитика трендов
-
-⚙️ *Механики:*
-• P2P обменник токенов
-• Мобильное приложение
-• Расширенная аналитика
-
-👇 *Подробнее*`, comingSoonMenu);
-            break;
-
-        // === AI ИНСТРУМЕНТЫ ===
-        case 'ai_post':
-            await sendMessage(chatId,
-`📝 *Генератор постов*
-
-👉 *Создать пост:* ${SITE_URL}/ai/post`);
-            break;
-
-        case 'ai_ideas':
-            await sendMessage(chatId,
-`🎨 *Генератор идей*
-
-👉 *Получить идеи:* ${SITE_URL}/ai/ideas`);
-            break;
-
-        // === БЫСТРЫЕ УСЛУГИ ===
-        case 'fast_services':
-            await sendMessage(chatId,
-`⚡ *Быстрые услуги*
-
-👉 *Заказать:* ${SITE_URL}/fast-services`);
-            break;
-
-        // === ТОКЕНЫ ===
-        case 'tokens_info':
-            await sendMessage(chatId,
-`💰 *Токены*
-
-💎 *Что это?*
-Внутренняя валюта платформы для оплаты услуг.
-
-🎁 *Как получить?*
-• Бонус за регистрацию
-• Конкурсы и розыгрыши
-• Приглашение друзей
-• Акции и специальные предложения
-
-📋 *На что тратить?*
-• Создание заданий
-• AI инструменты
-• Быстрые услуги
-
-👉 *Пополнить баланс:* ${SITE_URL}/buy`);
-            break;
-
-        // === ПРОФИЛЬ ===
         case 'profile':
             await sendMessage(chatId,
 `👤 *Профиль*
 
-🔗 *Привяжи аккаунт:* ${SITE_URL}/profile
+🔗 *Привяжи аккаунт и управляй профилем на сайте:*
 
-📊 *После привязки доступно:*
+${SITE_URL}/profile
+
+📊 *После привязки ты увидишь:*
 • Баланс токенов
-• Статистика
-• История операций`);
+• Историю операций
+• Статистику`);
             break;
 
-        // === КОНКУРСЫ ===
+        case 'tokens':
+            await sendMessage(chatId,
+`💰 *Токены*
+
+💎 *Внутренняя валюта платформы*
+
+🎁 *Как получить:*
+• Бонус за регистрацию
+• Конкурсы и розыгрыши
+• Приглашение друзей
+• Акции
+
+📋 *На что тратить:*
+• Создание заданий
+• AI инструменты
+• Быстрые услуги
+
+👉 *Управлять балансом:* ${SITE_URL}/tokens`);
+            break;
+
         case 'contests':
             await sendMessage(chatId,
 `🎁 *Конкурсы и розыгрыши*
 
-Актуальные конкурсы:
+🔥 *Актуальные конкурсы:*
 
-🔥 *Ежедневный бонус*
-Заходи на сайт каждый день и получай бонусные токены!
+• *Ежедневный бонус* — заходи на сайт и получай токены
+• *Конкурс активности* — топ-10 в конце месяца
+• *Розыгрыши* — следи за анонсами
 
-🏆 *Конкурс активности*
-Топ-10 самых активных пользователей в конце месяца получают призы.
+👉 *Участвовать:* ${SITE_URL}/contests
 
-🎲 *Розыгрыши*
-Следи за анонсами в нашем Telegram канале!
-
-👉 *Участвовать:* ${SITE_URL}/contests`);
+🎯 *А пока можешь поиграть в мини-игры!*`);
             break;
 
-        // === ПОМОЩЬ ===
         case 'help':
             await sendMessage(chatId,
 `🆘 *Помощь*
 
-📌 *Разделы:*
-📋 Биржа заданий — создавай задания
-🤖 AI Инструменты — генерация контента
-⚙️ Без ИИ — быстрые услуги
-🔥 Скоро — новые функции
+📌 *О боте:*
 
-🔗 *Сайт:* ${SITE_URL}
+🌐 *Сайт:* ${SITE_URL}
+🎮 *Игры:* Кости, дартс, футбол, баскетбол, угадай число, камень-ножницы
+
 📧 *Поддержка:* @aquozales
 
-🎁 *Бонусы и конкурсы:* Следи за анонсами в канале!`);
+🎁 *Бонусы и конкурсы:* Следи за анонсами в канале!
+
+👇 *Используй меню для навигации*`);
             break;
 
-        // === ТИЗЕРЫ ===
-        case 'coming_soon_detail':
-            await sendMessage(chatId,
-`🔥 *Будущие функции*
+        // === МИНИ-ИГРЫ ===
+        case 'games':
+            await sendMessage(chatId, '🎮 *Выбери игру:*', gamesMenu);
+            break;
 
-🤖 *AI-резюме для видео*
-→ Анализ видео за 30 секунд
+        case 'game_dice':
+            const diceValue = Math.floor(Math.random() * 6) + 1;
+            const diceEmojis = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+            await sendMessage(chatId, `🎲 *Ты выбросил ${diceValue}* ${diceEmojis[diceValue]}\n\nПопробуй ещё раз!`);
+            break;
 
-🎧 *Голосовой AI-ассистент*
-→ Управление голосом
+        case 'game_darts':
+            const dartsValue = Math.floor(Math.random() * 7) + 1;
+            const dartsMessages = ['Мимо!', '1 очко', '2 очка', '3 очка', '4 очка', '5 очков', '🎯 ЯБЛОЧКО! 6 очков!'];
+            await sendMessage(chatId, `🎯 *Дартс*\n\n${dartsMessages[dartsValue]}`);
+            break;
 
-📈 *AI-аналитика трендов*
-→ Прогноз популярности
+        case 'game_football':
+            const footballResult = Math.floor(Math.random() * 4);
+            const footballMessages = ['🥅 ГОЛ! Ты забил!', '🧤 Вратарь поймал мяч', '📐 Удар в штангу', '🌪️ Удар мимо ворот'];
+            await sendMessage(chatId, `⚽ *Футбол*\n\n${footballMessages[footballResult]}`);
+            break;
 
-🌍 *P2P обменник*
-→ Продавай и покупай токены
+        case 'game_basketball':
+            const basketballResult = Math.floor(Math.random() * 4);
+            const basketballMessages = ['🏀 Трёхочковый! Свиш!', '🧱 Удар в кольцо — мимо', '📐 Бросок со штрафной — точно!', '💥 Блок-шот! Не залетело'];
+            await sendMessage(chatId, `🏀 *Баскетбол*\n\n${basketballMessages[basketballResult]}`);
+            break;
 
-📱 *Мобильное приложение*
-→ Все функции в телефоне
+        case 'game_number':
+            const secretNumber = Math.floor(Math.random() * 100) + 1;
+            gameStates.set(chatId, { type: 'number', number: secretNumber });
+            await sendMessage(chatId, `🎲 *Угадай число*
 
-📅 *Следи за анонсами!*`);
+Я загадал число от 1 до 100.
+
+🔢 Введи своё предположение в чат!`);
+            break;
+
+        case 'game_rps':
+            const choices = ['✊ Камень', '✋ Бумага', '✌️ Ножницы'];
+            const botChoice = Math.floor(Math.random() * 3);
+            
+            const rpsMenu = {
+                inline_keyboard: [
+                    [
+                        { text: '✊ Камень', callback_data: 'rps_rock' },
+                        { text: '✋ Бумага', callback_data: 'rps_paper' },
+                        { text: '✌️ Ножницы', callback_data: 'rps_scissors' }
+                    ],
+                    [
+                        { text: '⬅️ Назад', callback_data: 'games' }
+                    ]
+                ]
+            };
+            
+            await sendMessage(chatId, `✂️ *Камень-ножницы-бумага*
+
+Выбери свой вариант:`, rpsMenu);
+            break;
+
+        // === ЛОГИКА КАМЕНЬ-НОЖНИЦЫ ===
+        case 'rps_rock':
+            const botRock = Math.floor(Math.random() * 3);
+            const resultRock = getRPSResult(0, botRock);
+            await sendMessage(chatId, `${resultRock}`);
+            break;
+
+        case 'rps_paper':
+            const botPaper = Math.floor(Math.random() * 3);
+            const resultPaper = getRPSResult(1, botPaper);
+            await sendMessage(chatId, `${resultPaper}`);
+            break;
+
+        case 'rps_scissors':
+            const botScissors = Math.floor(Math.random() * 3);
+            const resultScissors = getRPSResult(2, botScissors);
+            await sendMessage(chatId, `${resultScissors}`);
             break;
 
         default:
@@ -338,6 +279,37 @@ app.post('/webhook/callback', async (req, res) => {
 
     res.sendStatus(200);
 });
+
+function getRPSResult(player, bot) {
+    const choices = ['✊ Камень', '✋ Бумага', '✌️ Ножницы'];
+    const playerChoice = choices[player];
+    const botChoice = choices[bot];
+    
+    if (player === bot) {
+        return `✂️ *Камень-ножницы-бумага*
+
+Ты выбрал: ${playerChoice}
+Бот выбрал: ${botChoice}
+
+🤝 *Ничья!* Попробуй ещё раз!`;
+    }
+    
+    if ((player === 0 && bot === 2) || (player === 1 && bot === 0) || (player === 2 && bot === 1)) {
+        return `✂️ *Камень-ножницы-бумага*
+
+Ты выбрал: ${playerChoice}
+Бот выбрал: ${botChoice}
+
+🎉 *Ты победил!* 🎉`;
+    }
+    
+    return `✂️ *Камень-ножницы-бумага*
+
+Ты выбрал: ${playerChoice}
+Бот выбрал: ${botChoice}
+
+😔 *Бот победил!* Попробуй ещё раз!`;
+}
 
 async function sendMessage(chatId, text, replyMarkup = null) {
     const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
