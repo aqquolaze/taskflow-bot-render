@@ -70,13 +70,13 @@ async function checkUserRegistered(telegramId) {
         console.log(`🔍 Ищем пользователя с telegram_id: ${telegramId}`);
         
         const url = `${SUPABASE_URL}/rest/v1/profiles?telegram_id=eq."${telegramId}"&select=id,balance`;
-        console.log(`📡 Запрос к Supabase: ${url}`);
         
         const response = await fetch(url, {
             method: 'GET',
             headers: { 
                 'apikey': SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                'Range': '0-9'
             }
         });
         
@@ -92,6 +92,7 @@ async function checkUserRegistered(telegramId) {
         return { registered: false };
     }
 }
+
 async function updateUserBalance(telegramId, newBalance) {
     try {
         await fetch(`${SUPABASE_URL}/rest/v1/profiles?telegram_id=eq.${telegramId}`, {
