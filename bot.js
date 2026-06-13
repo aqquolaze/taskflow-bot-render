@@ -244,10 +244,6 @@ app.post('/webhook', async (req, res) => {
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-🎮 *Игры на токены:* Кости (x2), Дартс (x3), Футбол (x2.5), Баскетбол (x2), Угадай число (x5), Камень-ножницы (x2)
-
-━━━━━━━━━━━━━━━━━━━━━━
-
 👇 *Выбери действие в меню*`;
 
             await sendMessage(chatId, welcomeText, mainMenu);
@@ -382,13 +378,6 @@ app.post('/webhook', async (req, res) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ callback_query_id: callback.id })
             });
-            res.sendStatus(200);
-            return;
-        }
-        
-        // Обработка текстовых ставок для RPS
-        if (gameStates.has(chatId) && gameStates.get(chatId).type === 'rps_waiting_bet') {
-            // Обработка будет в следующем сообщении
             res.sendStatus(200);
             return;
         }
