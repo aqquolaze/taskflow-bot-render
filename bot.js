@@ -69,18 +69,32 @@ async function checkUserRegistered(telegramId) {
     try {
         console.log(`🔍 Ищем пользователя с telegram_id: ${telegramId}`);
         
-        const url = `${SUPABASE_URL}/rest/v1/profiles?telegram_id=eq."${telegramId}"&select=id,balance`;
+        // Пробуем разные форматы запроса
+        let data = null;
         
-        const response = await fetch(url, {
+        // Способ 1: прямой запрос с кавычками
+        let response = await fetch(`${SUPABASE_URL}/rest/v1/profiles?telegram_id=eq."${telegramId}"&select=id,balance`, {
             method: 'GET',
             headers: { 
                 'apikey': SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                'Range': '0-9'
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
             }
         });
         
-        const data = await response.json();
+        data = await response.json();
+        
+        // Способ 2: если не нашло, пробуем без кавычек
+        if (!data || data.length === 0) {
+            response = await fetch(`${SUPABASE_URL}/rest/v1/profiles?telegram_id=eq.${telegramId}&select=id,balance`, {
+                method: 'GET',
+                headers: { 
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                }
+            });
+            data = await response.json();
+        }
+        
         console.log(`📊 Результат запроса:`, JSON.stringify(data));
         
         if (data && data.length > 0) {
