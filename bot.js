@@ -27,9 +27,9 @@ async function sendChatAction(chatId, action = 'typing') {
 }
 
 // --- ID ВАШИХ АНИМИРОВАННЫХ СТИКЕРОВ (ЗАМЕНИТЕ НА СВОИ) ---
-const WIN_STICKER_ID = 'CAACAgIAAxkBAAEB...'; // Победный стикер
-const LOSE_STICKER_ID = 'CAACAgIAAxkBAAEB...'; // Грустный стикер
-const GAME_START_STICKER_ID = 'CAACAgIAAxkBAAEB...'; // Стартовый стикер
+const WIN_STICKER_ID = 'CAACAgIAAxkBAANTaiyw6AdeEoib8mIIPUIOeneagVwAAoVaAAJaf5hLlrBpubdws6M8BA'; // Победный стикер
+const LOSE_STICKER_ID = 'CAACAgIAAxkBAANRaiywvZ2eiEbm1qHjn_tUVZSWV4UAAlRQAAKrwZlLBSOXHUbe1Tk8BA'; // Грустный стикер
+const GAME_START_STICKER_ID = 'CAACAgIAAxkBAANOaiywBv2V8rC155YeHIRX9ejLYF0AAjdTAAImgJFLtTw-FQrNpb08BA'; // Стартовый стикер
 
 // --- ОСНОВНОЕ МЕНЮ ---
 const mainMenu = {
@@ -101,10 +101,7 @@ app.post('/webhook', async (req, res) => {
         const text = message.text || '';
         const username = message.from?.first_name || 'друг';
         const messageId = message.message_id;
-if (update.message && update.message.sticker) {
-    const stickerId = update.message.sticker.file_id;
-    await sendMessage(update.message.chat.id, `✅ ID стикера: \`${stickerId}\``);
-}
+
         // Логика игры "Угадай число"
         if (gameStates.has(chatId)) {
             const game = gameStates.get(chatId);
