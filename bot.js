@@ -1,3 +1,4 @@
+// bot.js
 import express from 'express';
 const app = express();
 app.use(express.json());
@@ -17,6 +18,7 @@ async function sendSticker(chatId, stickerId) {
         body: JSON.stringify({ chat_id: chatId, sticker: stickerId })
     }).catch(e => console.log('Sticker error:', e.message));
 }
+
 async function sendChatAction(chatId, action = 'typing') {
     const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendChatAction`;
     await fetch(url, {
@@ -26,10 +28,10 @@ async function sendChatAction(chatId, action = 'typing') {
     });
 }
 
-// --- ID ВАШИХ АНИМИРОВАННЫХ СТИКЕРОВ (ЗАМЕНИТЕ НА СВОИ) ---
-const WIN_STICKER_ID = 'CAACAgIAAxkBAANTaiyw6AdeEoib8mIIPUIOeneagVwAAoVaAAJaf5hLlrBpubdws6M8BA'; // Победный стикер
-const LOSE_STICKER_ID = 'CAACAgIAAxkBAANRaiywvZ2eiEbm1qHjn_tUVZSWV4UAAlRQAAKrwZlLBSOXHUbe1Tk8BA'; // Грустный стикер
-const GAME_START_STICKER_ID = 'CAACAgIAAxkBAANOaiywBv2V8rC155YeHIRX9ejLYF0AAjdTAAImgJFLtTw-FQrNpb08BA'; // Стартовый стикер
+// --- ID АНИМИРОВАННЫХ СТИКЕРОВ (ЗАМЕНИТЕ НА СВОИ) ---
+const WIN_STICKER_ID = 'CAACAgIAAxkBAAEB...';
+const LOSE_STICKER_ID = 'CAACAgIAAxkBAAEB...';
+const GAME_START_STICKER_ID = 'CAACAgIAAxkBAAEB...';
 
 // --- ОСНОВНОЕ МЕНЮ ---
 const mainMenu = {
@@ -40,6 +42,7 @@ const mainMenu = {
         [{ text: '📋 О проекте', callback_data: 'about' }, { text: '🔗 Привязать аккаунт', callback_data: 'link_account' }]
     ]
 };
+
 const gamesMenu = {
     inline_keyboard: [
         [{ text: '🎲 Кости (x2)', callback_data: 'game_dice' }, { text: '🎯 Дартс (x3)', callback_data: 'game_darts' }],
@@ -48,6 +51,7 @@ const gamesMenu = {
         [{ text: '⬅️ Назад', callback_data: 'back_main' }]
     ]
 };
+
 async function getBetMenu(gameId, gameName, multiplier) {
     return {
         inline_keyboard: [
@@ -57,6 +61,7 @@ async function getBetMenu(gameId, gameName, multiplier) {
         ]
     };
 }
+
 const gameStates = new Map();
 
 // --- ФУНКЦИИ БАЗЫ ДАННЫХ ---
@@ -70,6 +75,7 @@ async function checkUserRegistered(telegramId) {
         return { registered: false };
     } catch (error) { console.error(error); return { registered: false }; }
 }
+
 async function updateUserBalance(telegramId, newBalance) {
     try {
         await fetch(`${SUPABASE_URL}/rest/v1/profiles?telegram_id=eq.${telegramId}`, {
@@ -79,12 +85,15 @@ async function updateUserBalance(telegramId, newBalance) {
         });
     } catch (error) { console.error(error); }
 }
+
+// --- ФУНКЦИИ ОТПРАВКИ СООБЩЕНИЙ ---
 async function editMessage(chatId, messageId, text, replyMarkup = null) {
     const url = `https://api.telegram.org/bot${BOT_TOKEN}/editMessageText`;
     const body = { chat_id: chatId, message_id: messageId, text: text, parse_mode: 'Markdown' };
     if (replyMarkup) body.reply_markup = replyMarkup;
     await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 }
+
 async function sendMessage(chatId, text, replyMarkup = null) {
     const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
     const body = { chat_id: chatId, text: text, parse_mode: 'Markdown' };
@@ -92,9 +101,11 @@ async function sendMessage(chatId, text, replyMarkup = null) {
     await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 }
 
+// --- ОСНОВНОЙ ОБРАБОТЧИК ---
 app.post('/webhook', async (req, res) => {
     const update = req.body;
-    // Обработка обычных сообщений (для игры "Угадай число")
+    
+    // Обработка обычных сообщений
     if (update.message) {
         const message = update.message;
         const chatId = message.chat.id;
@@ -102,7 +113,47 @@ app.post('/webhook', async (req, res) => {
         const username = message.from?.first_name || 'друг';
         const messageId = message.message_id;
 
-        // Логика игры "Угадай число"
+        // === ОБРАБОТКА КОДА ПРИВЯЗКИ TELEGRAM К САЙТУ ===
+        if (text && /^[A-Z0-9]{6}$/.test(text)) {
+            const code = text;
+            
+            try {
+                // Ищем пользователя с таким кодом
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/profiles?telegram_code=eq.${code}&select=id`, {
+                    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+                });
+                const profiles = await response.json();
+                
+                if (profiles && profiles.length > 0) {
+                    const userId = profiles[0].id;
+                    
+                    // Удаляем старую привязку у этого telegram_id (если была)
+                    await fetch(`${SUPABASE_URL}/rest/v1/profiles?telegram_id=eq.${chatId}`, {
+                        method: 'PATCH',
+                        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ telegram_id: null })
+                    });
+                    
+                    // Привязываем новый аккаунт
+                    await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`, {
+                        method: 'PATCH',
+                        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ telegram_id: chatId.toString(), telegram_code: null })
+                    });
+                    
+                    await sendMessage(chatId, '✅ Аккаунт успешно привязан! Теперь вы можете играть в мини-игры на токены.\n\n💰 Для проверки баланса используйте команду /start → Баланс');
+                } else {
+                    await sendMessage(chatId, '❌ Неверный код привязки. Попробуйте снова или запросите новый код на сайте.');
+                }
+            } catch (err) {
+                console.error('Ошибка привязки:', err);
+                await sendMessage(chatId, '❌ Ошибка при привязке. Попробуйте позже.');
+            }
+            res.sendStatus(200);
+            return;
+        }
+
+        // Обработка игры "Угадай число"
         if (gameStates.has(chatId)) {
             const game = gameStates.get(chatId);
             if (game.type === 'number_waiting_bet') {
@@ -161,7 +212,23 @@ app.post('/webhook', async (req, res) => {
         }
 
         if (text === '/start') {
-            const welcomeText = `✨ *Добро пожаловать в TaskFlow, ${username}!* ✨\n\n💎 *Многофункциональная платформа*\n\n🚀 *Основные возможности:*\n• Биржа заданий для продвижения\n• AI инструменты для контента\n• Быстрые услуги (лайки, подписки)\n• Токены — внутренняя валюта\n• Мини-игры на токены\n• Конкурсы и бонусы\n\n━━━━━━━━━━━━━━━━━━━━━━\n\n👇 *Выбери действие в меню*`;
+            const welcomeText = 
+`✨ *Добро пожаловать в TaskFlow, ${username}!* ✨
+
+💎 *Многофункциональная платформа*
+
+🚀 *Основные возможности:*
+• Биржа заданий для продвижения
+• AI инструменты для контента
+• Быстрые услуги (лайки, подписки)
+• Токены — внутренняя валюта
+• Мини-игры на токены
+• Конкурсы и бонусы
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+👇 *Выбери действие в меню*`;
+
             await sendMessage(chatId, welcomeText, mainMenu);
             await sendSticker(chatId, GAME_START_STICKER_ID);
             res.sendStatus(200); return;
@@ -176,7 +243,7 @@ app.post('/webhook', async (req, res) => {
         const data = callback.data;
         console.log(`Нажата кнопка: ${data} от пользователя ${chatId}`);
 
-        // Обработка ставок в играх
+        // Обработка ставок
         if (data.startsWith('bet_')) {
             const parts = data.split('_'); const gameId = parts[1]; const bet = parseInt(parts[2]);
             const userCheck = await checkUserRegistered(chatId);
@@ -192,7 +259,6 @@ app.post('/webhook', async (req, res) => {
             }
             await sendChatAction(chatId, 'typing');
 
-            // Логика разных игр
             switch(gameId) {
                 case 'dice':
                     const diceResult = Math.floor(Math.random() * 6) + 1;
@@ -217,7 +283,7 @@ app.post('/webhook', async (req, res) => {
                     const footballWin = footballResult === 0 ? Math.floor(bet * 2.5) : 0;
                     const footballNewBalance = userCheck.balance - bet + footballWin;
                     await updateUserBalance(chatId, footballNewBalance);
-                    const footballMessages = ['🥅 ГОЛ!', '🧤 Вратарь поймал мяч', '📐 Удар в штангу', '🌪️ Мимо ворот'];
+                    const footballMessages = ['🥅 ГОЛ! Ты забил!', '🧤 Вратарь поймал мяч', '📐 Удар в штангу', '🌪️ Мимо ворот'];
                     await editMessage(chatId, messageId, `⚽ *Футбол (x2.5)*\n\n${footballMessages[footballResult]}\n💰 Ставка: ${bet}\n${footballWin > 0 ? `✅ Ты выиграл ${footballWin} токенов! 🎉` : `❌ Ты проиграл ${bet} токенов`}\n📊 Новый баланс: ${footballNewBalance}`, gamesMenu);
                     if (footballWin > 0) await sendSticker(chatId, WIN_STICKER_ID);
                     else await sendSticker(chatId, LOSE_STICKER_ID);
@@ -238,8 +304,13 @@ app.post('/webhook', async (req, res) => {
                     await editMessage(chatId, messageId, `🎲 *Угадай число (x5)*\n\nВведи сумму ставки (минимум 10 токенов):`, gamesMenu);
                     break;
                 case 'rps':
-                    gameStates.set(chatId, { type: 'rps_waiting_bet' });
-                    await editMessage(chatId, messageId, `✂️ *Камень-ножницы-бумага (x2)*\n\nВыбери свой вариант и введи ставку в следующем сообщении:`, gamesMenu);
+                    const rpsMenu = {
+                        inline_keyboard: [
+                            [{ text: '✊ Камень', callback_data: 'rps_rock' }, { text: '✋ Бумага', callback_data: 'rps_paper' }, { text: '✌️ Ножницы', callback_data: 'rps_scissors' }],
+                            [{ text: '⬅️ Назад', callback_data: 'games' }]
+                        ]
+                    };
+                    await editMessage(chatId, messageId, `✂️ *Камень-ножницы (x2)*\n\nВыбери свой вариант:`, rpsMenu);
                     break;
             }
             await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ callback_query_id: callback.id }) });
@@ -248,10 +319,38 @@ app.post('/webhook', async (req, res) => {
 
         // Обработка RPS выбора
         if (data === 'rps_rock' || data === 'rps_paper' || data === 'rps_scissors') {
-            gameStates.set(chatId, { type: 'rps_waiting_bet', choice: data });
-            await editMessage(chatId, messageId, `✂️ *Камень-ножницы-бумага (x2)*\n\nВведи сумму ставки (минимум 10 токенов):`, gamesMenu);
+            const botChoice = Math.floor(Math.random() * 3);
+            const choices = ['✊ Камень', '✋ Бумага', '✌️ Ножницы'];
+            const playerChoiceText = choices[data === 'rps_rock' ? 0 : data === 'rps_paper' ? 1 : 2];
+            const botChoiceText = choices[botChoice];
+            
+            let result = '';
+            let win = false;
+            
+            if ((data === 'rps_rock' && botChoice === 2) ||
+                (data === 'rps_paper' && botChoice === 0) ||
+                (data === 'rps_scissors' && botChoice === 1)) {
+                result = '🎉 Ты победил!';
+                win = true;
+            } else if ((data === 'rps_rock' && botChoice === 1) ||
+                       (data === 'rps_paper' && botChoice === 2) ||
+                       (data === 'rps_scissors' && botChoice === 0)) {
+                result = '😔 Ты проиграл!';
+                win = false;
+            } else {
+                result = '🤝 Ничья!';
+                win = null;
+            }
+            
+            await editMessage(chatId, messageId, `✂️ *Камень-ножницы-бумага*\n\nТы: ${playerChoiceText}\nБот: ${botChoiceText}\n\n${result}\n\n💰 Введи сумму ставки (минимум 10 токенов):`, gamesMenu);
+            gameStates.set(chatId, { type: 'rps_waiting_bet', rpsPlayer: data, rpsBot: botChoice });
             await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ callback_query_id: callback.id }) });
             res.sendStatus(200); return;
+        }
+
+        // Обработка RPS ставки
+        if (gameStates.has(chatId) && gameStates.get(chatId).type === 'rps_waiting_bet') {
+            // Этот блок обрабатывается в сообщении, а не в callback
         }
 
         // Обработка обычных кнопок меню
@@ -260,32 +359,127 @@ app.post('/webhook', async (req, res) => {
                 await editMessage(chatId, messageId, '✨ *Главное меню TaskFlow* ✨', mainMenu);
                 break;
             case 'about':
-                await editMessage(chatId, messageId, `📋 *О ПРОЕКТЕ TASKFLOW*\n\n💎 *Многофункциональная платформа*\n\n🚀 *Основные возможности:*\n📋 *Биржа заданий* — продвижение через подписки, лайки, репосты\n🤖 *AI инструменты* — генератор постов, идей, сценариев, SEO\n⚡ *Быстрые услуги* — моментальное выполнение действий\n💎 *Токены* — внутренняя валюта для всего\n\n🎮 *Мини-игры на токены:*\n🎲 Кости | 🎯 Дартс | ⚽ Футбол | 🏀 Баскетбол | 🎰 Угадай число | ✂️ Камень-ножницы\n\n🎁 *Конкурсы и бонусы:*\n• Ежедневный бонус\n• Пригласи друга (+50 токенов)\n• Конкурс активности\n• Розыгрыши\n\n🔮 *В разработке:*\n• P2P обменник токенов\n• Мобильное приложение\n• AI-аналитика трендов\n• Голосовой ассистент\n\n📧 *Поддержка:* @aqquolaze\n🔗 *Сайт:* ${SITE_URL}`, mainMenu);
+                await editMessage(chatId, messageId, 
+`📋 *О ПРОЕКТЕ TASKFLOW*
+
+💎 *Многофункциональная платформа*
+
+🚀 *Основные возможности:*
+📋 *Биржа заданий* — продвижение через подписки, лайки, репосты
+🤖 *AI инструменты* — генератор постов, идей, сценариев, SEO
+⚡ *Быстрые услуги* — моментальное выполнение действий
+💎 *Токены* — внутренняя валюта для всего
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+🎮 *Мини-игры на токены:*
+🎲 Кости | 🎯 Дартс | ⚽ Футбол | 🏀 Баскетбол | 🎰 Угадай число | ✂️ Камень-ножницы
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+🎁 *Конкурсы и бонусы:*
+• Ежедневный бонус
+• Пригласи друга (+50 токенов)
+• Конкурс активности
+• Розыгрыши
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+🔮 *В разработке:*
+• P2P обменник токенов
+• Мобильное приложение
+• AI-аналитика трендов
+• Голосовой ассистент
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+📧 *Поддержка:* @aqquolaze
+🔗 *Сайт:* ${SITE_URL}`, mainMenu);
                 break;
             case 'profile':
                 const userCheckProfile = await checkUserRegistered(chatId);
                 if (userCheckProfile.registered) {
-                    await editMessage(chatId, messageId, `👤 *ПРОФИЛЬ*\n\n✅ Аккаунт привязан!\n\n💰 Баланс: ${userCheckProfile.balance} токенов\n🆔 ID: ${userCheckProfile.userId}\n\n🔗 ${SITE_URL}/profile`, mainMenu);
+                    await editMessage(chatId, messageId, 
+`👤 *ПРОФИЛЬ*
+
+✅ Аккаунт привязан!
+
+💰 Баланс: ${userCheckProfile.balance} токенов
+🆔 ID: ${userCheckProfile.userId}
+
+🔗 ${SITE_URL}/profile`, mainMenu);
                 } else {
-                    await editMessage(chatId, messageId, `👤 *ПРОФИЛЬ*\n\n❌ Аккаунт не привязан!\n\n🔗 *Привяжи аккаунт на сайте:* ${SITE_URL}/profile\n\nПосле привязки ты сможешь играть на токены и видеть свой баланс.`, mainMenu);
+                    await editMessage(chatId, messageId, 
+`👤 *ПРОФИЛЬ*
+
+❌ Аккаунт не привязан!
+
+🔗 *Привяжи аккаунт на сайте:* ${SITE_URL}/profile
+
+После привязки ты сможешь играть на токены и видеть свой баланс.`, mainMenu);
                 }
                 break;
             case 'balance':
                 const userCheckBalance = await checkUserRegistered(chatId);
                 if (userCheckBalance.registered) {
-                    await editMessage(chatId, messageId, `💰 *ТОКЕНЫ*\n\n💎 Твой баланс: ${userCheckBalance.balance} токенов\n\n🎮 *Играй и выигрывай!*`, mainMenu);
+                    await editMessage(chatId, messageId, 
+`💰 *ТОКЕНЫ*
+
+💎 Твой баланс: ${userCheckBalance.balance} токенов
+
+🎮 *Играй и выигрывай!*`, mainMenu);
                 } else {
-                    await editMessage(chatId, messageId, `💰 *ТОКЕНЫ*\n\n❌ Аккаунт не привязан!\n\n🔗 *Привяжи аккаунт на сайте:* ${SITE_URL}/profile\n\nПосле привязки ты сможешь видеть баланс и играть.`, mainMenu);
+                    await editMessage(chatId, messageId, 
+`💰 *ТОКЕНЫ*
+
+❌ Аккаунт не привязан!
+
+🔗 *Привяжи аккаунт на сайте:* ${SITE_URL}/profile
+
+После привязки ты сможешь видеть баланс и играть.`, mainMenu);
                 }
                 break;
             case 'contests':
-                await editMessage(chatId, messageId, `🎁 *КОНКУРСЫ*\n\n• Ежедневный бонус\n• Пригласи друга (+50 токенов)\n• Конкурс активности\n• Розыгрыши\n\n👉 ${SITE_URL}/contests`, mainMenu);
+                await editMessage(chatId, messageId, 
+`🎁 *КОНКУРСЫ*
+
+• Ежедневный бонус
+• Пригласи друга (+50 токенов)
+• Конкурс активности
+• Розыгрыши
+
+👉 ${SITE_URL}/contests`, mainMenu);
                 break;
             case 'link_account':
-                await editMessage(chatId, messageId, `🔗 *ПРИВЯЗКА АККАУНТА*\n\n1. Зайди на сайт: ${SITE_URL}\n2. Перейди в Профиль → Привязать Telegram\n3. Нажми на кнопку "Привязать"\n4. Бот автоматически свяжет аккаунты\n\n✅ *После привязки ты сможешь:*\n• Играть на токены\n• Проверять баланс\n• Получать уведомления\n\n📧 *Вопросы:* @aqquolaze`, mainMenu);
+                await editMessage(chatId, messageId, 
+`🔗 *ПРИВЯЗКА АККАУНТА*
+
+1. Зайди на сайт: ${SITE_URL}
+2. Перейди в Профиль → Привязать Telegram
+3. Нажми на кнопку "Привязать"
+4. Скопируй код и отправь его сюда
+
+✅ *После привязки ты сможешь:*
+• Играть на токены
+• Проверять баланс
+• Получать уведомления
+
+📧 *Вопросы:* @aqquolaze`, mainMenu);
                 break;
             case 'games':
-                await editMessage(chatId, messageId, `🎮 *ИГРЫ НА ТОКЕНЫ*\n\n🎲 Кости (x2) — угадай выпадение\n🎯 Дартс (x3) — попади в яблочко\n⚽ Футбол (x2.5) — забей гол\n🏀 Баскетбол (x2) — трёхочковый\n🎰 Угадай число (x5) — угадай число\n✂️ Камень-ножницы (x2) — победи бота\n\n⚠️ *Для игры нужен привязанный аккаунт!*\n\n👇 *Выбери игру:*`, gamesMenu);
+                await editMessage(chatId, messageId, 
+`🎮 *ИГРЫ НА ТОКЕНЫ*
+
+🎲 Кости (x2) — угадай выпадение
+🎯 Дартс (x3) — попади в яблочко
+⚽ Футбол (x2.5) — забей гол
+🏀 Баскетбол (x2) — трёхочковый
+🎰 Угадай число (x5) — угадай число
+✂️ Камень-ножницы (x2) — победи бота
+
+⚠️ *Для игры нужен привязанный аккаунт!*
+
+👇 *Выбери игру:*`, gamesMenu);
                 break;
             case 'game_dice':
                 await editMessage(chatId, messageId, `🎲 *Кости (x2)*\n\nВыбери ставку:`, await getBetMenu('dice', 'Кости', 2));
@@ -303,17 +497,30 @@ app.post('/webhook', async (req, res) => {
                 await editMessage(chatId, messageId, `🎰 *Угадай число (x5)*\n\nВыбери ставку:`, await getBetMenu('number', 'Угадай число', 5));
                 break;
             case 'game_rps':
-                await editMessage(chatId, messageId, `✂️ *Камень-ножницы (x2)*\n\nВыбери ставку:`, await getBetMenu('rps', 'Камень-ножницы', 2));
+                const rpsBetMenu = {
+                    inline_keyboard: [
+                        [{ text: '✊ Камень', callback_data: 'rps_rock' }, { text: '✋ Бумага', callback_data: 'rps_paper' }, { text: '✌️ Ножницы', callback_data: 'rps_scissors' }],
+                        [{ text: '⬅️ Назад', callback_data: 'games' }]
+                    ]
+                };
+                await editMessage(chatId, messageId, `✂️ *Камень-ножницы (x2)*\n\nВыбери свой вариант:`, rpsBetMenu);
                 break;
             default:
                 await editMessage(chatId, messageId, '⚠️ Неизвестная команда', mainMenu);
         }
+        
         await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ callback_query_id: callback.id }) });
         res.sendStatus(200); return;
     }
+    
     res.sendStatus(200);
 });
 
-app.get('/', (req, res) => { res.send('🤖 TaskFlow Bot работает!'); });
+app.get('/', (req, res) => {
+    res.send('🤖 TaskFlow Bot работает!');
+});
+
 const port = process.env.PORT || 3000;
-app.listen(port, () => { console.log(`🤖 TaskFlow Bot запущен на порту ${port}`); });
+app.listen(port, () => {
+    console.log(`🤖 TaskFlow Bot запущен на порту ${port}`);
+});
