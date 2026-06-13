@@ -69,7 +69,7 @@ async function checkUserRegistered(telegramId) {
     try {
         console.log(`🔍 Ищем пользователя с telegram_id: ${telegramId}`);
         
-        const url = `${SUPABASE_URL}/rest/v1/profiles?telegram_id=eq.${telegramId}&select=id,balance`;
+        const url = `${SUPABASE_URL}/rest/v1/profiles?telegram_id=eq."${telegramId}"&select=id,balance`;
         console.log(`📡 Запрос к Supabase: ${url}`);
         
         const response = await fetch(url, {
