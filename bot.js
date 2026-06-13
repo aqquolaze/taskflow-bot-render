@@ -60,12 +60,12 @@ async function getBetMenu(gameId, gameName, multiplier) {
 
 const gameStates = new Map();
 
-// --- ФУНКЦИЯ ПРОВЕРКИ РЕГИСТРАЦИИ ---
+// --- ФУНКЦИЯ ПРОВЕРКИ РЕГИСТРАЦИИ (возвращает username) ---
 async function checkUserRegistered(telegramId) {
     try {
         console.log(`🔍 Ищем пользователя с telegram_id: ${telegramId}`);
         
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/profiles?telegram_id=eq.${telegramId}&select=id,balance`, {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/profiles?telegram_id=eq.${telegramId}&select=id,balance,username`, {
             method: 'GET',
             headers: { 
                 'apikey': SUPABASE_ANON_KEY,
@@ -77,7 +77,12 @@ async function checkUserRegistered(telegramId) {
         console.log(`📊 Результат запроса:`, JSON.stringify(data));
         
         if (data && data.length > 0) {
-            return { registered: true, userId: data[0].id, balance: data[0].balance };
+            return { 
+                registered: true, 
+                userId: data[0].id, 
+                balance: data[0].balance,
+                username: data[0].username || 'Пользователь'
+            };
         }
         return { registered: false };
     } catch (error) {
@@ -380,7 +385,8 @@ app.post('/webhook', async (req, res) => {
 
 ✅ Аккаунт привязан!
 
-🆔 ID: ${userCheckProfile.userId.slice(0, 8)}...
+👤 *Ник:* ${userCheckProfile.username}
+🆔 *ID:* ${userCheckProfile.userId.slice(0, 8)}...
 
 🔗 ${SITE_URL}/profile
 
