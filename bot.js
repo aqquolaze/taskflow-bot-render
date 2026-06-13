@@ -8,32 +8,12 @@ const SITE_URL = 'https://gotaskflow.ru';
 const SUPABASE_URL = 'https://woqnhepaqbgzilboaydp.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_hX1v_iYn2mzGhNyEkaCtzg_LwrzgI8Q';
 
-// --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
-async function sendSticker(chatId, stickerId) {
-    if (!stickerId || stickerId === 'CAACAgIAAxkBAAEB...') return;
-    const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendSticker`;
-    await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, sticker: stickerId })
-    }).catch(e => console.log('Sticker error:', e.message));
-}
-
-async function sendChatAction(chatId, action = 'typing') {
-    const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendChatAction`;
-    await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, action: action })
-    });
-}
-
-// --- ID СТИКЕРОВ (ЗАМЕНИТЕ НА СВОИ) ---
+// --- ID АНИМИРОВАННЫХ СТИКЕРОВ (ЗАМЕНИТЕ НА СВОИ) ---
 const WIN_STICKER_ID = 'CAACAgIAAxkBAAEB...';
 const LOSE_STICKER_ID = 'CAACAgIAAxkBAAEB...';
 const GAME_START_STICKER_ID = 'CAACAgIAAxkBAAEB...';
 
-// --- МЕНЮ ---
+// --- МЕНЮ (без баланса в приветствии) ---
 const mainMenu = {
     inline_keyboard: [
         [{ text: '🌐 Открыть сайт', url: SITE_URL }],
@@ -42,6 +22,23 @@ const mainMenu = {
         [{ text: '📋 О проекте', callback_data: 'about' }, { text: '🔗 Привязать аккаунт', callback_data: 'link_account' }]
     ]
 };
+
+// --- ПРИВЕТСТВИЕ (без баланса) ---
+const welcomeText = 
+`✨ *Добро пожаловать в TaskFlow!* ✨
+
+💎 *Многофункциональная платформа*
+
+🚀 *Основные возможности:*
+• Биржа заданий для продвижения
+• AI инструменты для контента
+• Быстрые услуги (лайки, подписки)
+• Токены — внутренняя валюта
+• Мини-игры на токены
+• Конкурсы и бонусы
+
+
+👇 *Выбери действие в меню*`;
 
 const gamesMenu = {
     inline_keyboard: [
@@ -64,16 +61,12 @@ async function getBetMenu(gameId, gameName, multiplier) {
 
 const gameStates = new Map();
 
-// --- ФУНКЦИЯ ПРОВЕРКИ РЕГИСТРАЦИИ (ИСПРАВЛЕННАЯ) ---
+// --- ФУНКЦИЯ ПРОВЕРКИ РЕГИСТРАЦИИ ---
 async function checkUserRegistered(telegramId) {
     try {
         console.log(`🔍 Ищем пользователя с telegram_id: ${telegramId}`);
         
-        // Пробуем разные форматы запроса
-        let data = null;
-        
-        // Способ 1: прямой запрос с кавычками
-        let response = await fetch(`${SUPABASE_URL}/rest/v1/profiles?telegram_id=eq."${telegramId}"&select=id,balance`, {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/profiles?telegram_id=eq."${telegramId}"&select=id,balance`, {
             method: 'GET',
             headers: { 
                 'apikey': SUPABASE_ANON_KEY,
@@ -81,20 +74,7 @@ async function checkUserRegistered(telegramId) {
             }
         });
         
-        data = await response.json();
-        
-        // Способ 2: если не нашло, пробуем без кавычек
-        if (!data || data.length === 0) {
-            response = await fetch(`${SUPABASE_URL}/rest/v1/profiles?telegram_id=eq.${telegramId}&select=id,balance`, {
-                method: 'GET',
-                headers: { 
-                    'apikey': SUPABASE_ANON_KEY,
-                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-                }
-            });
-            data = await response.json();
-        }
-        
+        const data = await response.json();
         console.log(`📊 Результат запроса:`, JSON.stringify(data));
         
         if (data && data.length > 0) {
@@ -109,7 +89,7 @@ async function checkUserRegistered(telegramId) {
 
 async function updateUserBalance(telegramId, newBalance) {
     try {
-        await fetch(`${SUPABASE_URL}/rest/v1/profiles?telegram_id=eq.${telegramId}`, {
+        await fetch(`${SUPABASE_URL}/rest/v1/profiles?telegram_id=eq."${telegramId}"`, {
             method: 'PATCH',
             headers: { 
                 'apikey': SUPABASE_ANON_KEY, 
@@ -124,7 +104,25 @@ async function updateUserBalance(telegramId, newBalance) {
     }
 }
 
-// --- ФУНКЦИИ ОТПРАВКИ СООБЩЕНИЙ ---
+async function sendSticker(chatId, stickerId) {
+    if (!stickerId || stickerId === 'CAACAgIAAxkBAAEB...') return;
+    const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendSticker`;
+    await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, sticker: stickerId })
+    }).catch(e => console.log('Sticker error:', e.message));
+}
+
+async function sendChatAction(chatId, action = 'typing') {
+    const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendChatAction`;
+    await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, action: action })
+    });
+}
+
 async function editMessage(chatId, messageId, text, replyMarkup = null) {
     const url = `https://api.telegram.org/bot${BOT_TOKEN}/editMessageText`;
     const body = { chat_id: chatId, message_id: messageId, text: text, parse_mode: 'Markdown' };
@@ -142,9 +140,8 @@ async function sendMessage(chatId, text, replyMarkup = null) {
 // --- ОСНОВНОЙ ОБРАБОТЧИК ---
 app.post('/webhook', async (req, res) => {
     const update = req.body;
-    console.log('📨 Получено обновление:', JSON.stringify(update).slice(0, 500));
+    console.log('📨 Получено обновление');
     
-    // Обработка обычных сообщений
     if (update.message) {
         const message = update.message;
         const chatId = message.chat.id;
@@ -152,7 +149,7 @@ app.post('/webhook', async (req, res) => {
         const username = message.from?.first_name || 'друг';
         const messageId = message.message_id;
 
-        // === ОБРАБОТКА КОДА ПРИВЯЗКИ ===
+        // Обработка кода привязки
         if (text && /^[A-Z0-9]{6}$/.test(text)) {
             const code = text;
             console.log(`🔑 Получен код привязки: ${code} от ${chatId}`);
@@ -172,7 +169,7 @@ app.post('/webhook', async (req, res) => {
                         body: JSON.stringify({ telegram_id: chatId.toString(), telegram_code: null })
                     });
                     
-                    await sendMessage(chatId, '✅ Аккаунт успешно привязан! Теперь вы можете играть в мини-игры на токены.\n\n💰 Для проверки баланса используйте команду /start → Баланс');
+                    await sendMessage(chatId, '✅ Аккаунт успешно привязан! Теперь вы можете играть в мини-игры на токены.\n\n💰 Для проверки баланса используйте кнопку "Баланс" в меню.');
                 } else {
                     await sendMessage(chatId, '❌ Неверный код привязки. Попробуйте снова или запросите новый код на сайте.');
                 }
@@ -243,26 +240,10 @@ app.post('/webhook', async (req, res) => {
         }
 
         if (text === '/start') {
-            const welcomeText = 
-`✨ *Добро пожаловать в TaskFlow, ${username}!* ✨
-
-💎 *Многофункциональная платформа*
-
-🚀 *Основные возможности:*
-• Биржа заданий для продвижения
-• AI инструменты для контента
-• Быстрые услуги (лайки, подписки)
-• Токены — внутренняя валюта
-• Мини-игры на токены
-• Конкурсы и бонусы
-
-━━━━━━━━━━━━━━━━━━━━━━
-
-👇 *Выбери действие в меню*`;
-
             await sendMessage(chatId, welcomeText, mainMenu);
             await sendSticker(chatId, GAME_START_STICKER_ID);
-            res.sendStatus(200); return;
+            res.sendStatus(200);
+            return;
         }
     }
     
@@ -356,15 +337,10 @@ app.post('/webhook', async (req, res) => {
             res.sendStatus(200); return;
         }
 
-        // Обработка RPS ставки (в сообщении)
-        if (gameStates.has(chatId) && gameStates.get(chatId).type === 'rps_waiting_bet') {
-            // Обработка будет в следующем сообщении
-        }
-
         // Обработка обычных кнопок меню
         switch(data) {
             case 'back_main':
-                await editMessage(chatId, messageId, '✨ *Главное меню TaskFlow* ✨', mainMenu);
+                await editMessage(chatId, messageId, '✨ *Главное меню TaskFlow* ✨\n\nВыбери действие:', mainMenu);
                 break;
             case 'about':
                 await editMessage(chatId, messageId, 
@@ -376,30 +352,23 @@ app.post('/webhook', async (req, res) => {
 📋 *Биржа заданий* — продвижение через подписки, лайки, репосты
 🤖 *AI инструменты* — генератор постов, идей, сценариев, SEO
 ⚡ *Быстрые услуги* — моментальное выполнение действий
-💎 *Токены* — внутренняя валюта для всего
+💎 *Токены* — внутренняя валюта
 
-━━━━━━━━━━━━━━━━━━━━━━
 
 🎮 *Мини-игры на токены:*
 🎲 Кости | 🎯 Дартс | ⚽ Футбол | 🏀 Баскетбол | 🎰 Угадай число | ✂️ Камень-ножницы
 
-━━━━━━━━━━━━━━━━━━━━━━
 
 🎁 *Конкурсы и бонусы:*
 • Ежедневный бонус
 • Пригласи друга (+50 токенов)
 • Конкурс активности
-• Розыгрыши
 
-━━━━━━━━━━━━━━━━━━━━━━
 
 🔮 *В разработке:*
 • P2P обменник токенов
 • Мобильное приложение
-• AI-аналитика трендов
-• Голосовой ассистент
 
-━━━━━━━━━━━━━━━━━━━━━━
 
 📧 *Поддержка:* @aqquolaze
 🔗 *Сайт:* ${SITE_URL}`, mainMenu);
@@ -412,10 +381,11 @@ app.post('/webhook', async (req, res) => {
 
 ✅ Аккаунт привязан!
 
-💰 Баланс: ${userCheckProfile.balance} токенов
 🆔 ID: ${userCheckProfile.userId.slice(0, 8)}...
 
-🔗 ${SITE_URL}/profile`, mainMenu);
+🔗 ${SITE_URL}/profile
+
+💰 *Баланс можно проверить в главном меню*`, mainMenu);
                 } else {
                     await editMessage(chatId, messageId, 
 `👤 *ПРОФИЛЬ*
@@ -424,7 +394,7 @@ app.post('/webhook', async (req, res) => {
 
 🔗 *Привяжи аккаунт на сайте:* ${SITE_URL}/profile
 
-После привязки ты сможешь играть на токены и видеть свой баланс.`, mainMenu);
+После привязки ты сможешь играть на токены.`, mainMenu);
                 }
                 break;
             case 'balance':
@@ -451,10 +421,9 @@ app.post('/webhook', async (req, res) => {
                 await editMessage(chatId, messageId, 
 `🎁 *КОНКУРСЫ*
 
-• Ежедневный бонус
+• Ежедневный бонус (заходи на сайт)
 • Пригласи друга (+50 токенов)
 • Конкурс активности
-• Розыгрыши
 
 👉 ${SITE_URL}/contests`, mainMenu);
                 break;
@@ -469,7 +438,6 @@ app.post('/webhook', async (req, res) => {
 ✅ *После привязки ты сможешь:*
 • Играть на токены
 • Проверять баланс
-• Получать уведомления
 
 📧 *Вопросы:* @aqquolaze`, mainMenu);
                 break;
