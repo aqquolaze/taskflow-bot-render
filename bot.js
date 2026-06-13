@@ -8,7 +8,7 @@ const SITE_URL = 'https://gotaskflow.ru';
 const SUPABASE_URL = 'https://woqnhepaqbgzilboaydp.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_hX1v_iYn2mzGhNyEkaCtzg_LwrzgI8Q';
 
-// --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ АНИМАЦИЙ ---
+// --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 async function sendSticker(chatId, stickerId) {
     if (!stickerId || stickerId === 'CAACAgIAAxkBAAEB...') return;
     const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendSticker`;
@@ -28,12 +28,12 @@ async function sendChatAction(chatId, action = 'typing') {
     });
 }
 
-// --- ID АНИМИРОВАННЫХ СТИКЕРОВ (ЗАМЕНИТЕ НА СВОИ) ---
+// --- ID СТИКЕРОВ (ЗАМЕНИТЕ НА СВОИ) ---
 const WIN_STICKER_ID = 'CAACAgIAAxkBAAEB...';
 const LOSE_STICKER_ID = 'CAACAgIAAxkBAAEB...';
 const GAME_START_STICKER_ID = 'CAACAgIAAxkBAAEB...';
 
-// --- ОСНОВНОЕ МЕНЮ ---
+// --- МЕНЮ ---
 const mainMenu = {
     inline_keyboard: [
         [{ text: '🌐 Открыть сайт', url: SITE_URL }],
@@ -64,26 +64,46 @@ async function getBetMenu(gameId, gameName, multiplier) {
 
 const gameStates = new Map();
 
-// --- ФУНКЦИИ БАЗЫ ДАННЫХ ---
+// --- ФУНКЦИЯ ПРОВЕРКИ РЕГИСТРАЦИИ (ИСПРАВЛЕННАЯ) ---
 async function checkUserRegistered(telegramId) {
     try {
+        console.log(`🔍 Ищем пользователя с telegram_id: ${telegramId}`);
+        
         const response = await fetch(`${SUPABASE_URL}/rest/v1/profiles?telegram_id=eq.${telegramId}&select=id,balance`, {
-            headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+            headers: { 
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+            }
         });
+        
         const data = await response.json();
-        if (data && data.length > 0) return { registered: true, userId: data[0].id, balance: data[0].balance };
+        console.log(`📊 Результат запроса:`, data);
+        
+        if (data && data.length > 0) {
+            return { registered: true, userId: data[0].id, balance: data[0].balance };
+        }
         return { registered: false };
-    } catch (error) { console.error(error); return { registered: false }; }
+    } catch (error) {
+        console.error('Ошибка проверки регистрации:', error);
+        return { registered: false };
+    }
 }
 
 async function updateUserBalance(telegramId, newBalance) {
     try {
         await fetch(`${SUPABASE_URL}/rest/v1/profiles?telegram_id=eq.${telegramId}`, {
             method: 'PATCH',
-            headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+            headers: { 
+                'apikey': SUPABASE_ANON_KEY, 
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 
+                'Content-Type': 'application/json' 
+            },
             body: JSON.stringify({ balance: newBalance })
         });
-    } catch (error) { console.error(error); }
+        console.log(`💰 Баланс обновлён для ${telegramId}: ${newBalance}`);
+    } catch (error) { 
+        console.error('Ошибка обновления баланса:', error); 
+    }
 }
 
 // --- ФУНКЦИИ ОТПРАВКИ СООБЩЕНИЙ ---
@@ -104,6 +124,7 @@ async function sendMessage(chatId, text, replyMarkup = null) {
 // --- ОСНОВНОЙ ОБРАБОТЧИК ---
 app.post('/webhook', async (req, res) => {
     const update = req.body;
+    console.log('📨 Получено обновление:', JSON.stringify(update).slice(0, 500));
     
     // Обработка обычных сообщений
     if (update.message) {
@@ -113,12 +134,12 @@ app.post('/webhook', async (req, res) => {
         const username = message.from?.first_name || 'друг';
         const messageId = message.message_id;
 
-        // === ОБРАБОТКА КОДА ПРИВЯЗКИ TELEGRAM К САЙТУ ===
+        // === ОБРАБОТКА КОДА ПРИВЯЗКИ ===
         if (text && /^[A-Z0-9]{6}$/.test(text)) {
             const code = text;
+            console.log(`🔑 Получен код привязки: ${code} от ${chatId}`);
             
             try {
-                // Ищем пользователя с таким кодом
                 const response = await fetch(`${SUPABASE_URL}/rest/v1/profiles?telegram_code=eq.${code}&select=id`, {
                     headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
                 });
@@ -127,14 +148,6 @@ app.post('/webhook', async (req, res) => {
                 if (profiles && profiles.length > 0) {
                     const userId = profiles[0].id;
                     
-                    // Удаляем старую привязку у этого telegram_id (если была)
-                    await fetch(`${SUPABASE_URL}/rest/v1/profiles?telegram_id=eq.${chatId}`, {
-                        method: 'PATCH',
-                        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ telegram_id: null })
-                    });
-                    
-                    // Привязываем новый аккаунт
                     await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}`, {
                         method: 'PATCH',
                         headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
@@ -162,7 +175,7 @@ app.post('/webhook', async (req, res) => {
                     await editMessage(chatId, messageId, '❌ Введи корректное число токенов для ставки!');
                     res.sendStatus(200); return;
                 }
-                const userCheck = await checkUserRegistered(chatId);
+                const userCheck = await checkUserRegistered(chatId.toString());
                 if (!userCheck.registered) {
                     await editMessage(chatId, messageId, '❌ Ты не зарегистрирован!\n\n🔗 Привяжи аккаунт через меню или сайт.', mainMenu);
                     gameStates.delete(chatId);
@@ -187,19 +200,19 @@ app.post('/webhook', async (req, res) => {
                 const secretNumber = game.number; const bet = game.bet;
                 if (guess === secretNumber) {
                     const winAmount = bet * 5;
-                    const userCheck = await checkUserRegistered(chatId);
+                    const userCheck = await checkUserRegistered(chatId.toString());
                     if (userCheck.registered) {
                         const newBalance = userCheck.balance + winAmount;
-                        await updateUserBalance(chatId, newBalance);
+                        await updateUserBalance(chatId.toString(), newBalance);
                         await sendSticker(chatId, WIN_STICKER_ID);
                         await sendChatAction(chatId, 'typing');
                         await editMessage(chatId, messageId, `🎉 *ПОЗДРАВЛЯЮ!* 🎉\n\nТы угадал число ${secretNumber}!\n💰 Твой выигрыш: ${winAmount} токенов!\n📊 Новый баланс: ${newBalance} токенов`, gamesMenu);
                     }
                 } else {
-                    const userCheck = await checkUserRegistered(chatId);
+                    const userCheck = await checkUserRegistered(chatId.toString());
                     if (userCheck.registered) {
                         const newBalance = userCheck.balance - bet;
-                        await updateUserBalance(chatId, newBalance);
+                        await updateUserBalance(chatId.toString(), newBalance);
                         const hint = guess < secretNumber ? 'БОЛЬШЕ' : 'МЕНЬШЕ';
                         await sendSticker(chatId, LOSE_STICKER_ID);
                         await sendChatAction(chatId, 'typing');
@@ -241,12 +254,12 @@ app.post('/webhook', async (req, res) => {
         const chatId = callback.message.chat.id;
         const messageId = callback.message.message_id;
         const data = callback.data;
-        console.log(`Нажата кнопка: ${data} от пользователя ${chatId}`);
+        console.log(`🎮 Нажата кнопка: ${data} от пользователя ${chatId}`);
 
         // Обработка ставок
         if (data.startsWith('bet_')) {
             const parts = data.split('_'); const gameId = parts[1]; const bet = parseInt(parts[2]);
-            const userCheck = await checkUserRegistered(chatId);
+            const userCheck = await checkUserRegistered(chatId.toString());
             if (!userCheck.registered) {
                 await editMessage(chatId, messageId, '❌ Ты не зарегистрирован!\n\n🔗 Привяжи аккаунт на сайте: ' + SITE_URL + '/profile', mainMenu);
                 await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ callback_query_id: callback.id }) });
@@ -264,7 +277,7 @@ app.post('/webhook', async (req, res) => {
                     const diceResult = Math.floor(Math.random() * 6) + 1;
                     const diceWin = diceResult >= 4 ? bet * 2 : 0;
                     const diceNewBalance = userCheck.balance - bet + diceWin;
-                    await updateUserBalance(chatId, diceNewBalance);
+                    await updateUserBalance(chatId.toString(), diceNewBalance);
                     await editMessage(chatId, messageId, `🎲 *Игра в Кости (x2)*\n\nВыпало: ${diceResult}\n💰 Ставка: ${bet}\n${diceWin > 0 ? `✅ Ты выиграл ${diceWin} токенов! 🎉` : `❌ Ты проиграл ${bet} токенов`}\n📊 Новый баланс: ${diceNewBalance}`, gamesMenu);
                     if (diceWin > 0) await sendSticker(chatId, WIN_STICKER_ID);
                     else await sendSticker(chatId, LOSE_STICKER_ID);
@@ -273,7 +286,7 @@ app.post('/webhook', async (req, res) => {
                     const dartsResult = Math.floor(Math.random() * 7) + 1;
                     const dartsWin = dartsResult === 7 ? bet * 3 : 0;
                     const dartsNewBalance = userCheck.balance - bet + dartsWin;
-                    await updateUserBalance(chatId, dartsNewBalance);
+                    await updateUserBalance(chatId.toString(), dartsNewBalance);
                     await editMessage(chatId, messageId, `🎯 *Дартс (x3)*\n\nРезультат: ${dartsResult}${dartsResult === 7 ? ' — ЯБЛОЧКО!' : ''}\n💰 Ставка: ${bet}\n${dartsWin > 0 ? `✅ Ты выиграл ${dartsWin} токенов! 🎉` : `❌ Ты проиграл ${bet} токенов`}\n📊 Новый баланс: ${dartsNewBalance}`, gamesMenu);
                     if (dartsWin > 0) await sendSticker(chatId, WIN_STICKER_ID);
                     else await sendSticker(chatId, LOSE_STICKER_ID);
@@ -282,7 +295,7 @@ app.post('/webhook', async (req, res) => {
                     const footballResult = Math.floor(Math.random() * 4);
                     const footballWin = footballResult === 0 ? Math.floor(bet * 2.5) : 0;
                     const footballNewBalance = userCheck.balance - bet + footballWin;
-                    await updateUserBalance(chatId, footballNewBalance);
+                    await updateUserBalance(chatId.toString(), footballNewBalance);
                     const footballMessages = ['🥅 ГОЛ! Ты забил!', '🧤 Вратарь поймал мяч', '📐 Удар в штангу', '🌪️ Мимо ворот'];
                     await editMessage(chatId, messageId, `⚽ *Футбол (x2.5)*\n\n${footballMessages[footballResult]}\n💰 Ставка: ${bet}\n${footballWin > 0 ? `✅ Ты выиграл ${footballWin} токенов! 🎉` : `❌ Ты проиграл ${bet} токенов`}\n📊 Новый баланс: ${footballNewBalance}`, gamesMenu);
                     if (footballWin > 0) await sendSticker(chatId, WIN_STICKER_ID);
@@ -292,7 +305,7 @@ app.post('/webhook', async (req, res) => {
                     const basketballResult = Math.floor(Math.random() * 4);
                     const basketballWin = basketballResult === 0 ? bet * 2 : 0;
                     const basketballNewBalance = userCheck.balance - bet + basketballWin;
-                    await updateUserBalance(chatId, basketballNewBalance);
+                    await updateUserBalance(chatId.toString(), basketballNewBalance);
                     const basketballMessages = ['🏀 Трёхочковый!', '🧱 Мимо кольца', '🎯 Точно в цель!', '💥 Блок-шот'];
                     await editMessage(chatId, messageId, `🏀 *Баскетбол (x2)*\n\n${basketballMessages[basketballResult]}\n💰 Ставка: ${bet}\n${basketballWin > 0 ? `✅ Ты выиграл ${basketballWin} токенов! 🎉` : `❌ Ты проиграл ${bet} токенов`}\n📊 Новый баланс: ${basketballNewBalance}`, gamesMenu);
                     if (basketballWin > 0) await sendSticker(chatId, WIN_STICKER_ID);
@@ -319,38 +332,15 @@ app.post('/webhook', async (req, res) => {
 
         // Обработка RPS выбора
         if (data === 'rps_rock' || data === 'rps_paper' || data === 'rps_scissors') {
-            const botChoice = Math.floor(Math.random() * 3);
-            const choices = ['✊ Камень', '✋ Бумага', '✌️ Ножницы'];
-            const playerChoiceText = choices[data === 'rps_rock' ? 0 : data === 'rps_paper' ? 1 : 2];
-            const botChoiceText = choices[botChoice];
-            
-            let result = '';
-            let win = false;
-            
-            if ((data === 'rps_rock' && botChoice === 2) ||
-                (data === 'rps_paper' && botChoice === 0) ||
-                (data === 'rps_scissors' && botChoice === 1)) {
-                result = '🎉 Ты победил!';
-                win = true;
-            } else if ((data === 'rps_rock' && botChoice === 1) ||
-                       (data === 'rps_paper' && botChoice === 2) ||
-                       (data === 'rps_scissors' && botChoice === 0)) {
-                result = '😔 Ты проиграл!';
-                win = false;
-            } else {
-                result = '🤝 Ничья!';
-                win = null;
-            }
-            
-            await editMessage(chatId, messageId, `✂️ *Камень-ножницы-бумага*\n\nТы: ${playerChoiceText}\nБот: ${botChoiceText}\n\n${result}\n\n💰 Введи сумму ставки (минимум 10 токенов):`, gamesMenu);
-            gameStates.set(chatId, { type: 'rps_waiting_bet', rpsPlayer: data, rpsBot: botChoice });
+            await editMessage(chatId, messageId, `✂️ *Камень-ножницы (x2)*\n\nВведи сумму ставки (минимум 10 токенов):`, gamesMenu);
+            gameStates.set(chatId, { type: 'rps_waiting_bet', rpsChoice: data });
             await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ callback_query_id: callback.id }) });
             res.sendStatus(200); return;
         }
 
-        // Обработка RPS ставки
+        // Обработка RPS ставки (в сообщении)
         if (gameStates.has(chatId) && gameStates.get(chatId).type === 'rps_waiting_bet') {
-            // Этот блок обрабатывается в сообщении, а не в callback
+            // Обработка будет в следующем сообщении
         }
 
         // Обработка обычных кнопок меню
@@ -397,7 +387,7 @@ app.post('/webhook', async (req, res) => {
 🔗 *Сайт:* ${SITE_URL}`, mainMenu);
                 break;
             case 'profile':
-                const userCheckProfile = await checkUserRegistered(chatId);
+                const userCheckProfile = await checkUserRegistered(chatId.toString());
                 if (userCheckProfile.registered) {
                     await editMessage(chatId, messageId, 
 `👤 *ПРОФИЛЬ*
@@ -405,7 +395,7 @@ app.post('/webhook', async (req, res) => {
 ✅ Аккаунт привязан!
 
 💰 Баланс: ${userCheckProfile.balance} токенов
-🆔 ID: ${userCheckProfile.userId}
+🆔 ID: ${userCheckProfile.userId.slice(0, 8)}...
 
 🔗 ${SITE_URL}/profile`, mainMenu);
                 } else {
@@ -420,7 +410,7 @@ app.post('/webhook', async (req, res) => {
                 }
                 break;
             case 'balance':
-                const userCheckBalance = await checkUserRegistered(chatId);
+                const userCheckBalance = await checkUserRegistered(chatId.toString());
                 if (userCheckBalance.registered) {
                     await editMessage(chatId, messageId, 
 `💰 *ТОКЕНЫ*
@@ -456,8 +446,7 @@ app.post('/webhook', async (req, res) => {
 
 1. Зайди на сайт: ${SITE_URL}
 2. Перейди в Профиль → Привязать Telegram
-3. Нажми на кнопку "Привязать"
-4. Скопируй код и отправь его сюда
+3. Скопируй код и отправь его сюда
 
 ✅ *После привязки ты сможешь:*
 • Играть на токены
