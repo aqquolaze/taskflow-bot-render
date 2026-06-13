@@ -13,7 +13,7 @@ const WIN_STICKER_ID = 'CAACAgIAAxkBAAEB...';
 const LOSE_STICKER_ID = 'CAACAgIAAxkBAAEB...';
 const GAME_START_STICKER_ID = 'CAACAgIAAxkBAAEB...';
 
-// --- МЕНЮ (без баланса в приветствии) ---
+// --- МЕНЮ ---
 const mainMenu = {
     inline_keyboard: [
         [{ text: '🌐 Открыть сайт', url: SITE_URL }],
@@ -23,7 +23,6 @@ const mainMenu = {
     ]
 };
 
-// --- ПРИВЕТСТВИЕ (без баланса) ---
 const welcomeText = 
 `✨ *Добро пожаловать в TaskFlow!* ✨
 
@@ -66,7 +65,7 @@ async function checkUserRegistered(telegramId) {
     try {
         console.log(`🔍 Ищем пользователя с telegram_id: ${telegramId}`);
         
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/profiles?telegram_id=eq."${telegramId}"&select=id,balance`, {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/profiles?telegram_id=eq.${telegramId}&select=id,balance`, {
             method: 'GET',
             headers: { 
                 'apikey': SUPABASE_ANON_KEY,
@@ -89,7 +88,7 @@ async function checkUserRegistered(telegramId) {
 
 async function updateUserBalance(telegramId, newBalance) {
     try {
-        await fetch(`${SUPABASE_URL}/rest/v1/profiles?telegram_id=eq."${telegramId}"`, {
+        await fetch(`${SUPABASE_URL}/rest/v1/profiles?telegram_id=eq.${telegramId}`, {
             method: 'PATCH',
             headers: { 
                 'apikey': SUPABASE_ANON_KEY, 
@@ -169,7 +168,7 @@ app.post('/webhook', async (req, res) => {
                         body: JSON.stringify({ telegram_id: chatId.toString(), telegram_code: null })
                     });
                     
-                    await sendMessage(chatId, '✅ Аккаунт успешно привязан! Теперь вы можете играть в мини-игры на токены.\n\n💰 Для проверки баланса используйте кнопку "Баланс" в меню.');
+                    await sendMessage(chatId, '✅ Аккаунт успешно привязан! Теперь вы можете играть в мини-игры на токены.');
                 } else {
                     await sendMessage(chatId, '❌ Неверный код привязки. Попробуйте снова или запросите новый код на сайте.');
                 }
@@ -401,14 +400,14 @@ app.post('/webhook', async (req, res) => {
                 const userCheckBalance = await checkUserRegistered(chatId.toString());
                 if (userCheckBalance.registered) {
                     await editMessage(chatId, messageId, 
-`💰 *ТОКЕНЫ*
+`💰 *БАЛАНС*
 
 💎 Твой баланс: ${userCheckBalance.balance} токенов
 
 🎮 *Играй и выигрывай!*`, mainMenu);
                 } else {
                     await editMessage(chatId, messageId, 
-`💰 *ТОКЕНЫ*
+`💰 *БАЛАНС*
 
 ❌ Аккаунт не привязан!
 
