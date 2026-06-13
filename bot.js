@@ -36,6 +36,7 @@ const welcomeText =
 • Мини-игры на токены
 • Конкурсы и бонусы
 
+━━━━━━━━━━━━━━━━━━━━━━
 
 👇 *Выбери действие в меню*`;
 
@@ -43,7 +44,6 @@ const gamesMenu = {
     inline_keyboard: [
         [{ text: '🎲 Кости (x2)', callback_data: 'game_dice' }, { text: '🎯 Дартс (x3)', callback_data: 'game_darts' }],
         [{ text: '⚽ Футбол (x2.5)', callback_data: 'game_football' }, { text: '🏀 Баскетбол (x2)', callback_data: 'game_basketball' }],
-        [{ text: '🎰 Угадай число (x5)', callback_data: 'game_number' }, { text: '✂️ Камень-ножницы (x2)', callback_data: 'game_rps' }],
         [{ text: '⬅️ Назад', callback_data: 'back_main' }]
     ]
 };
@@ -60,7 +60,7 @@ async function getBetMenu(gameId, gameName, multiplier) {
 
 const gameStates = new Map();
 
-// --- ФУНКЦИЯ ПРОВЕРКИ РЕГИСТРАЦИИ (возвращает username) ---
+// --- ФУНКЦИЯ ПРОВЕРКИ РЕГИСТРАЦИИ ---
 async function checkUserRegistered(telegramId) {
     try {
         console.log(`🔍 Ищем пользователя с telegram_id: ${telegramId}`);
@@ -185,64 +185,6 @@ app.post('/webhook', async (req, res) => {
             return;
         }
 
-        // Обработка игры "Угадай число"
-        if (gameStates.has(chatId)) {
-            const game = gameStates.get(chatId);
-            if (game.type === 'number_waiting_bet') {
-                const bet = parseInt(text);
-                if (isNaN(bet) || bet <= 0) {
-                    await editMessage(chatId, messageId, '❌ Введи корректное число токенов для ставки!');
-                    res.sendStatus(200); return;
-                }
-                const userCheck = await checkUserRegistered(chatId.toString());
-                if (!userCheck.registered) {
-                    await editMessage(chatId, messageId, '❌ Ты не зарегистрирован!\n\n🔗 Привяжи аккаунт через меню или сайт.', mainMenu);
-                    gameStates.delete(chatId);
-                    res.sendStatus(200); return;
-                }
-                if (userCheck.balance < bet) {
-                    await editMessage(chatId, messageId, `❌ Недостаточно токенов! У тебя ${userCheck.balance}, а ставка ${bet}.`, gamesMenu);
-                    gameStates.delete(chatId);
-                    res.sendStatus(200); return;
-                }
-                gameStates.set(chatId, { type: 'number_playing', number: game.number, bet: bet });
-                await sendChatAction(chatId, 'typing');
-                await editMessage(chatId, messageId, `🎲 *Угадай число*\n\nЯ загадал число от 1 до 100.\n💰 Твоя ставка: ${bet} токенов\n\n🔢 Введи своё предположение!`);
-                res.sendStatus(200); return;
-            }
-            if (game.type === 'number_playing') {
-                const guess = parseInt(text);
-                if (isNaN(guess) || guess < 1 || guess > 100) {
-                    await editMessage(chatId, messageId, '🔢 Введи число от 1 до 100!');
-                    res.sendStatus(200); return;
-                }
-                const secretNumber = game.number; const bet = game.bet;
-                if (guess === secretNumber) {
-                    const winAmount = bet * 5;
-                    const userCheck = await checkUserRegistered(chatId.toString());
-                    if (userCheck.registered) {
-                        const newBalance = userCheck.balance + winAmount;
-                        await updateUserBalance(chatId.toString(), newBalance);
-                        await sendSticker(chatId, WIN_STICKER_ID);
-                        await sendChatAction(chatId, 'typing');
-                        await editMessage(chatId, messageId, `🎉 *ПОЗДРАВЛЯЮ!* 🎉\n\nТы угадал число ${secretNumber}!\n💰 Твой выигрыш: ${winAmount} токенов!\n📊 Новый баланс: ${newBalance} токенов`, gamesMenu);
-                    }
-                } else {
-                    const userCheck = await checkUserRegistered(chatId.toString());
-                    if (userCheck.registered) {
-                        const newBalance = userCheck.balance - bet;
-                        await updateUserBalance(chatId.toString(), newBalance);
-                        const hint = guess < secretNumber ? 'БОЛЬШЕ' : 'МЕНЬШЕ';
-                        await sendSticker(chatId, LOSE_STICKER_ID);
-                        await sendChatAction(chatId, 'typing');
-                        await editMessage(chatId, messageId, `❌ *Неправильно!*\n\nЗагаданное число ${hint} чем ${guess}.\n💰 Ты проиграл ${bet} токенов.\n📊 Новый баланс: ${newBalance} токенов`, gamesMenu);
-                    }
-                }
-                gameStates.delete(chatId);
-                res.sendStatus(200); return;
-            }
-        }
-
         if (text === '/start') {
             await sendMessage(chatId, welcomeText, mainMenu);
             await sendSticker(chatId, GAME_START_STICKER_ID);
@@ -314,29 +256,10 @@ app.post('/webhook', async (req, res) => {
                     if (basketballWin > 0) await sendSticker(chatId, WIN_STICKER_ID);
                     else await sendSticker(chatId, LOSE_STICKER_ID);
                     break;
-                case 'number':
-                    const secretNumber = Math.floor(Math.random() * 100) + 1;
-                    gameStates.set(chatId, { type: 'number_waiting_bet', number: secretNumber });
-                    await editMessage(chatId, messageId, `🎲 *Угадай число (x5)*\n\nВведи сумму ставки (минимум 10 токенов):`, gamesMenu);
-                    break;
-                case 'rps':
-                    const rpsMenu = {
-                        inline_keyboard: [
-                            [{ text: '✊ Камень', callback_data: 'rps_rock' }, { text: '✋ Бумага', callback_data: 'rps_paper' }, { text: '✌️ Ножницы', callback_data: 'rps_scissors' }],
-                            [{ text: '⬅️ Назад', callback_data: 'games' }]
-                        ]
-                    };
-                    await editMessage(chatId, messageId, `✂️ *Камень-ножницы (x2)*\n\nВыбери свой вариант:`, rpsMenu);
+                default:
+                    await editMessage(chatId, messageId, `🎮 *Игра*\n\nРезультат: ${gameId}`, gamesMenu);
                     break;
             }
-            await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ callback_query_id: callback.id }) });
-            res.sendStatus(200); return;
-        }
-
-        // Обработка RPS выбора
-        if (data === 'rps_rock' || data === 'rps_paper' || data === 'rps_scissors') {
-            await editMessage(chatId, messageId, `✂️ *Камень-ножницы (x2)*\n\nВведи сумму ставки (минимум 10 токенов):`, gamesMenu);
-            gameStates.set(chatId, { type: 'rps_waiting_bet', rpsChoice: data });
             await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ callback_query_id: callback.id }) });
             res.sendStatus(200); return;
         }
@@ -358,21 +281,25 @@ app.post('/webhook', async (req, res) => {
 ⚡ *Быстрые услуги* — моментальное выполнение действий
 💎 *Токены* — внутренняя валюта
 
+━━━━━━━━━━━━━━━━━━━━━━
 
 🎮 *Мини-игры на токены:*
-🎲 Кости | 🎯 Дартс | ⚽ Футбол | 🏀 Баскетбол | 🎰 Угадай число | ✂️ Камень-ножницы
+🎲 Кости | 🎯 Дартс | ⚽ Футбол | 🏀 Баскетбол
 
+━━━━━━━━━━━━━━━━━━━━━━
 
 🎁 *Конкурсы и бонусы:*
 • Ежедневный бонус
 • Пригласи друга (+50 токенов)
 • Конкурс активности
 
+━━━━━━━━━━━━━━━━━━━━━━
 
 🔮 *В разработке:*
 • P2P обменник токенов
 • Мобильное приложение
 
+━━━━━━━━━━━━━━━━━━━━━━
 
 📧 *Поддержка:* @aqquolaze
 🔗 *Сайт:* ${SITE_URL}`, mainMenu);
@@ -454,8 +381,6 @@ app.post('/webhook', async (req, res) => {
 🎯 Дартс (x3) — попади в яблочко
 ⚽ Футбол (x2.5) — забей гол
 🏀 Баскетбол (x2) — трёхочковый
-🎰 Угадай число (x5) — угадай число
-✂️ Камень-ножницы (x2) — победи бота
 
 ⚠️ *Для игры нужен привязанный аккаунт!*
 
@@ -472,18 +397,6 @@ app.post('/webhook', async (req, res) => {
                 break;
             case 'game_basketball':
                 await editMessage(chatId, messageId, `🏀 *Баскетбол (x2)*\n\nВыбери ставку:`, await getBetMenu('basketball', 'Баскетбол', 2));
-                break;
-            case 'game_number':
-                await editMessage(chatId, messageId, `🎰 *Угадай число (x5)*\n\nВыбери ставку:`, await getBetMenu('number', 'Угадай число', 5));
-                break;
-            case 'game_rps':
-                const rpsBetMenu = {
-                    inline_keyboard: [
-                        [{ text: '✊ Камень', callback_data: 'rps_rock' }, { text: '✋ Бумага', callback_data: 'rps_paper' }, { text: '✌️ Ножницы', callback_data: 'rps_scissors' }],
-                        [{ text: '⬅️ Назад', callback_data: 'games' }]
-                    ]
-                };
-                await editMessage(chatId, messageId, `✂️ *Камень-ножницы (x2)*\n\nВыбери свой вариант:`, rpsBetMenu);
                 break;
             default:
                 await editMessage(chatId, messageId, '⚠️ Неизвестная команда', mainMenu);
